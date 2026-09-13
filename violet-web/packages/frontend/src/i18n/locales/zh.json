@@ -292,6 +292,12 @@
       "padding": {
         "title": "边距"
       }
+    },
+    "resume": {
+      "title": "继续阅读",
+      "message": "您已阅读到第 {{page}} / {{total}} 页。要继续阅读吗？",
+      "resume": "继续阅读",
+      "startOver": "从头开始"
     }
   },
   "activity": { "eyebrow": "Your library", "heading": "User activity", "subtitle": "A clear view of how you use Violet.", "reads": "Reads", "read": "Read", "bookmarks": "Bookmarks", "bookmark": "Bookmarked", "crops": "Crops", "crop": "Cropped", "downloads": "Downloads", "download": "Downloaded", "uniqueWorks": "Unique works", "trend": "Activity trend", "periodSummary": "{{total}} actions · {{days}} active days · {{average}} per active day", "days": "{{count}}d", "all": "All", "mix": "Activity mix", "mixSubtitle": "Share of all recorded actions", "recent": "Recent activity", "recentSubtitle": "Latest changes saved in user.db", "empty": "No activity yet", "error": "Failed to load user activity." },

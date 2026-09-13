@@ -332,10 +332,10 @@
       }
     },
     "resume": {
-      "title": "이어서 읽기",
-      "message": "{{page}} / {{total}} 페이지까지 읽었습니다. 이어서 읽으시겠습니까?",
-      "resume": "이어서 읽기",
-      "startOver": "처음부터"
+      "title": "이어서 읽을까요?",
+      "message": "{{page}} / {{total}} 페이지까지 읽었습니다. 이어서 볼까요?",
+      "resume": "이어서 보기",
+      "startOver": "처음부터 보기"
     }
   },
   "activity": {
