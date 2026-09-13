@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getUserDb } from './user-db.js';
 import { resolveGallery, getGalleryHeaders } from './gallery-resolver.js';
+import { resolveImageSource } from './image-proxy.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ARTICLES_DIR = path.resolve(__dirname, '../../data/articles');
@@ -111,11 +112,16 @@ async function processDownload(downloadId: number, articleId: string): Promise<v
     headers['User-Agent'] = USER_AGENT;
 
     for (let i = 0; i < urls.length; i++) {
-      const url = urls[i];
-      const ext = getExtFromUrl(url);
+      const source = await resolveImageSource(urls[i]);
+      const ext = getExtFromUrl(source.url);
       const filePath = path.join(articleDir, `${i}${ext}`);
 
-      const res = await fetchWithRetry(url, headers, tag, i);
+      const res = await fetchWithRetry(
+        source.url,
+        { ...headers, ...source.headers },
+        tag,
+        i,
+      );
 
       const buffer = Buffer.from(await res.arrayBuffer());
       fs.writeFileSync(filePath, buffer);
