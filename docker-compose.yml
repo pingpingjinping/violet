@@ -239,6 +239,7 @@ services:
       KEYWORD_GRAPH_BASE_URL: http://graph:8787
       LLM_SEARCH_BASE_URL: http://llm-search:8788
       SYNC_ENABLED: "false"
+      EXHENTAI_COOKIE: ${EXHENTAI_COOKIE:-}
       PORT: "3001"
     ports:
       - "3001:3001"
