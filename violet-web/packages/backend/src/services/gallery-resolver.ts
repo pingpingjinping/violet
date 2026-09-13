@@ -8,12 +8,14 @@
  */
 
 import type { ImageList } from '@violet-web/shared';
+import { getContentDb } from './content-db.js';
 
 const BASE_DOMAIN = 'gold-usergeneratedcontent.net';
 const GG_JS_URL = `https://ltn.${BASE_DOMAIN}/gg.js`;
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+const EH_REQUEST_TIMEOUT_MS = 15_000;
 
 interface GalleryFile {
   hash?: string;
@@ -30,6 +32,21 @@ interface GgRouting {
   o2: number;
 }
 
+export interface EhGalleryMetadata {
+  ehash: string;
+  files: number | null;
+  thumbnail: string | null;
+}
+
+class UpstreamHttpError extends Error {
+  constructor(
+    readonly url: string,
+    readonly status: number,
+  ) {
+    super(`Failed to fetch ${url}: ${status}`);
+  }
+}
+
 let routingCache: GgRouting | null = null;
 let latestUpdate = 0;
 let routingRefresh: Promise<void> | null = null;
@@ -39,8 +56,130 @@ async function fetchText(url: string, headers?: Record<string, string>): Promise
   const res = await fetch(url, {
     headers: { 'User-Agent': USER_AGENT, ...headers },
   });
-  if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
+  if (!res.ok) throw new UpstreamHttpError(url, res.status);
   return res.text();
+}
+
+function getEhCookie(): string | null {
+  const cookie = process.env.EXHENTAI_COOKIE?.trim();
+  if (!cookie) return null;
+  if (/[\r\n]/.test(cookie)) throw new Error('EXHENTAI_COOKIE contains invalid characters');
+  return cookie;
+}
+
+function getEhMetadata(id: number): EhGalleryMetadata | null {
+  const row = getContentDb()
+    .prepare('SELECT EHash, Files, Thumbnail FROM HitomiColumnModel WHERE Id = ?')
+    .get(id) as { EHash?: string | null; Files?: number | null; Thumbnail?: string | null } | undefined;
+  const ehash = row?.EHash?.trim();
+  if (!ehash) return null;
+  return {
+    ehash,
+    files: row?.Files ?? null,
+    thumbnail: row?.Thumbnail ?? null,
+  };
+}
+
+function decodeHtmlAttribute(value: string): string {
+  return value
+    .replaceAll('&amp;', '&')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#39;', "'");
+}
+
+function extractEhImagePages(html: string, id: number, origin: string): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  const pattern = /href=["']((?:https?:\/\/(?:e-hentai|exhentai)\.org)?\/s\/[^"']+)["']/gi;
+  for (const match of html.matchAll(pattern)) {
+    const url = new URL(decodeHtmlAttribute(match[1]), origin).toString();
+    if (!new URL(url).pathname.match(new RegExp(`/${id}-\\d+$`)) || seen.has(url)) continue;
+    seen.add(url);
+    result.push(url);
+  }
+  return result;
+}
+
+function extractEhThumbnails(html: string): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  const pattern = /https:\/\/(?:[^"'\s]+\.)?(?:exhentai|ehgt)\.org\/t\/[^"'\s<>)]+/gi;
+  for (const match of html.matchAll(pattern)) {
+    const url = decodeHtmlAttribute(match[0]);
+    if (seen.has(url)) continue;
+    seen.add(url);
+    result.push(url);
+  }
+  return result;
+}
+
+async function fetchEhGalleryPage(url: string, cookie: string | null): Promise<string> {
+  const headers: Record<string, string> = {
+    'User-Agent': USER_AGENT,
+    Accept: 'text/html,application/xhtml+xml',
+    Referer: new URL(url).origin + '/',
+  };
+  if (cookie) headers.Cookie = cookie;
+
+  const response = await fetch(url, {
+    headers,
+    redirect: 'manual',
+    signal: AbortSignal.timeout(EH_REQUEST_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new UpstreamHttpError(url, response.status);
+  const html = await response.text();
+  if (!html.includes('id="gdt"') && !html.includes("id='gdt'")) {
+    throw new Error(`E-Hentai gallery unavailable or authentication required: ${url}`);
+  }
+  return html;
+}
+
+async function resolveEhGallery(id: number, metadata: EhGalleryMetadata): Promise<ImageList> {
+  const cookie = getEhCookie();
+  const candidates = cookie
+    ? ['https://exhentai.org', 'https://e-hentai.org']
+    : ['https://e-hentai.org'];
+  let lastError: unknown;
+
+  for (const origin of candidates) {
+    try {
+      const imagePages: string[] = [];
+      const thumbnails: string[] = [];
+      const expected = metadata.files && metadata.files > 0 ? metadata.files : null;
+      const maxPages = expected ? Math.ceil(expected / 20) + 2 : 100;
+
+      for (let page = 0; page < maxPages; page++) {
+        const url = `${origin}/g/${id}/${metadata.ehash}/?p=${page}&inline_set=ts_m`;
+        const html = await fetchEhGalleryPage(url, cookie);
+        const pageLinks = extractEhImagePages(html, id, origin);
+        if (pageLinks.length === 0) break;
+
+        const known = new Set(imagePages);
+        const newLinks = pageLinks.filter((link) => !known.has(link));
+        if (newLinks.length === 0) break;
+        imagePages.push(...newLinks);
+        thumbnails.push(...extractEhThumbnails(html));
+        if (expected && imagePages.length >= expected) break;
+      }
+
+      if (imagePages.length === 0) throw new Error(`No E-Hentai image pages found for ${id}`);
+      const urls = expected ? imagePages.slice(0, expected) : imagePages;
+      const fallbackThumbs = thumbnails.length > 0
+        ? thumbnails.slice(0, urls.length)
+        : metadata.thumbnail ? [metadata.thumbnail] : [];
+      return {
+        urls,
+        bigThumbnails: fallbackThumbs,
+        smallThumbnails: [...fallbackThumbs],
+      };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`Failed to resolve E-Hentai gallery ${id}`);
 }
 
 async function tryRefreshV4(): Promise<boolean> {
@@ -150,10 +289,13 @@ function getGalleryHeadersSync(): Record<string, string> {
   };
 }
 
-export async function resolveGallery(id: number): Promise<ImageList> {
+export async function resolveGallery(
+  id: number,
+  fallbackMetadata?: EhGalleryMetadata,
+): Promise<ImageList> {
   let pending = pendingGalleries.get(id);
   if (!pending) {
-    pending = resolveGalleryUncached(id).finally(() => {
+    pending = resolveGalleryUncached(id, fallbackMetadata).finally(() => {
       pendingGalleries.delete(id);
     });
     pendingGalleries.set(id, pending);
@@ -167,17 +309,27 @@ export async function resolveGallery(id: number): Promise<ImageList> {
   };
 }
 
-async function resolveGalleryUncached(id: number): Promise<ImageList> {
+async function resolveGalleryUncached(
+  id: number,
+  fallbackMetadata?: EhGalleryMetadata,
+): Promise<ImageList> {
   await ensureScript();
   if (!routingCache) throw new Error('Hitomi routing data not available');
 
-  const galleryInfo = await getGalleryInfo(id);
-  const files = galleryInfo.files ?? [];
-  return {
-    urls: buildImageUrls(files, routingCache),
-    bigThumbnails: buildThumbnailUrls(files, routingCache, 'big'),
-    smallThumbnails: buildThumbnailUrls(files, routingCache, 'small'),
-  };
+  try {
+    const galleryInfo = await getGalleryInfo(id);
+    const files = galleryInfo.files ?? [];
+    return {
+      urls: buildImageUrls(files, routingCache),
+      bigThumbnails: buildThumbnailUrls(files, routingCache, 'big'),
+      smallThumbnails: buildThumbnailUrls(files, routingCache, 'small'),
+    };
+  } catch (error) {
+    if (!(error instanceof UpstreamHttpError) || error.status !== 404) throw error;
+    const metadata = fallbackMetadata ?? getEhMetadata(id);
+    if (!metadata) throw error;
+    return resolveEhGallery(id, metadata);
+  }
 }
 
 /**
