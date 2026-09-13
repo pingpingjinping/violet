@@ -23,6 +23,14 @@ function isEhGalleryHost(hostname: string): boolean {
   return hostname === 'e-hentai.org' || hostname === 'exhentai.org';
 }
 
+function isEhResourceHost(hostname: string): boolean {
+  return isEhGalleryHost(hostname)
+    || hostname.endsWith('.e-hentai.org')
+    || hostname.endsWith('.exhentai.org')
+    || hostname === 'ehgt.org'
+    || hostname.endsWith('.ehgt.org');
+}
+
 function decodeHtmlAttribute(value: string): string {
   return value.replaceAll('&amp;', '&').replaceAll('&quot;', '"').replaceAll('&#39;', "'");
 }
@@ -37,7 +45,7 @@ function extractEhImageUrl(html: string): string {
 function imageHeaders(url: string, referer?: string): Record<string, string> {
   const headers: Record<string, string> = { 'User-Agent': USER_AGENT };
   const parsed = new URL(url);
-  const isEhResource = isEhGalleryHost(parsed.hostname) || parsed.hostname.endsWith('.ehgt.org');
+  const isEhResource = isEhResourceHost(parsed.hostname);
   if (isEhResource) {
     const cookie = getEhCookie();
     if (cookie) headers.Cookie = cookie;
