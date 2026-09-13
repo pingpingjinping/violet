@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { resolveGallery } from './gallery-resolver.js';
+import { resolveImageSource } from './image-proxy.js';
 
 test('resolves Hitomi image URLs with current gg.js routing', async () => {
   const originalFetch = globalThis.fetch;
@@ -56,5 +57,62 @@ test('resolves Hitomi image URLs with current gg.js routing', async () => {
     assert.equal(shared.urls.includes('caller-only'), false);
   } finally {
     globalThis.fetch = originalFetch;
+  }
+});
+
+test('falls back to ExHentai metadata and resolves image pages lazily', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalCookie = process.env.EXHENTAI_COOKIE;
+  process.env.EXHENTAI_COOKIE = 'ipb_member_id=1; ipb_pass_hash=test; igneous=test';
+  const galleryUrl =
+    'https://exhentai.org/g/456/abc123/?p=0&inline_set=ts_m';
+  const firstPage = 'https://exhentai.org/s/token-a/456-1';
+  const secondPage = 'https://exhentai.org/s/token-b/456-2';
+  const imageUrl = 'https://exhentai.org/i/image-1.jpg';
+
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.includes('/galleries/456.js')) {
+      return new Response('not found', { status: 404 });
+    }
+    if (url === galleryUrl) {
+      const headers = new Headers(init?.headers);
+      assert.match(headers.get('cookie') ?? '', /ipb_member_id=1/);
+      assert.equal(init?.redirect, 'manual');
+      return new Response(
+        `<div id="gdt">
+          <a href="${firstPage}"><img src="https://s.exhentai.org/t/a.jpg"></a>
+          <a href="${secondPage}"><img src="https://s.exhentai.org/t/b.jpg"></a>
+        </div>`,
+      );
+    }
+    if (url === firstPage) {
+      const headers = new Headers(init?.headers);
+      assert.match(headers.get('cookie') ?? '', /ipb_member_id=1/);
+      return new Response(`<div id="i3"><a><img id="img" src="${imageUrl}"></a></div>`);
+    }
+    throw new Error(`Unexpected test URL: ${url}`);
+  };
+
+  try {
+    const gallery = await resolveGallery(456, {
+      ehash: 'abc123',
+      files: 2,
+      thumbnail: null,
+    });
+    assert.deepEqual(gallery.urls, [firstPage, secondPage]);
+    assert.deepEqual(gallery.bigThumbnails, [
+      'https://s.exhentai.org/t/a.jpg',
+      'https://s.exhentai.org/t/b.jpg',
+    ]);
+
+    const source = await resolveImageSource(firstPage);
+    assert.equal(source.url, imageUrl);
+    assert.equal(source.headers.Referer, firstPage);
+    assert.match(source.headers.Cookie ?? '', /ipb_pass_hash=test/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalCookie === undefined) delete process.env.EXHENTAI_COOKIE;
+    else process.env.EXHENTAI_COOKIE = originalCookie;
   }
 });
