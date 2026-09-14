@@ -51,7 +51,8 @@ function renderSyncVersion() {
   if (!versionRow) return;
 
   const value = versionRow.lastElementChild as HTMLElement | null;
-  if (value) value.textContent = mobileDbSyncVersion || i18n.t('settings.sync.never');
+  const nextValue = mobileDbSyncVersion || i18n.t('settings.sync.never');
+  if (value && value.textContent !== nextValue) value.textContent = nextValue;
 
   const lastSyncRow = findRowByLabel(i18n.t('settings.sync.lastSync'));
   const currentLastSync = lastSyncRow?.lastElementChild?.textContent?.trim() || '';
