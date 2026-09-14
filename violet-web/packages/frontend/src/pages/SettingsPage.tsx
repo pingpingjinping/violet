@@ -35,6 +35,7 @@ export function SettingsPage() {
   const helpRef = useRef<HTMLDivElement>(null);
   const imageCacheHelpRef = useRef<HTMLDivElement>(null);
   const { data: syncStatus } = useSyncStatus();
+  const [mobileDbSyncVersion, setMobileDbSyncVersion] = useState<string | null>(null);
   const triggerSync = useTriggerSync();
   const triggerFullSync = useTriggerFullSync();
   const [showFullSyncConfirm, setShowFullSyncConfirm] = useState(false);
@@ -61,6 +62,33 @@ export function SettingsPage() {
       .then(setExhentaiCookieStatus)
       .catch(() => setExhentaiCookieMessage('error'));
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSyncVersion = async () => {
+      try {
+        const response = await fetch(`http://${window.location.hostname}:3002/syncversion.txt`, {
+          cache: 'no-store',
+        });
+        if (!response.ok) return;
+        const text = await response.text();
+        const dbLine = text
+          .split('\n')
+          .map((line) => line.trim())
+          .find((line) => line.startsWith('db '));
+        const version = dbLine?.split(/\s+/)[1] || null;
+        if (!cancelled) setMobileDbSyncVersion(version);
+      } catch {
+        if (!cancelled) setMobileDbSyncVersion(null);
+      }
+    };
+
+    void loadSyncVersion();
+    return () => {
+      cancelled = true;
+    };
+  }, [syncStatus?.lastSync]);
 
   const handleSaveExhentaiCookie = async () => {
     setExhentaiCookieBusy(true);
@@ -821,7 +849,7 @@ export function SettingsPage() {
 
           <div className={styles.infoRow}>
             <span className={styles.label}>{t('settings.sync.lastSyncDb')}</span>
-            <span>{formatDate(syncStatus?.lastSyncDb || null)}</span>
+            <span>{mobileDbSyncVersion || t('settings.sync.never')}</span>
           </div>
 
           <div className={styles.infoRow}>
