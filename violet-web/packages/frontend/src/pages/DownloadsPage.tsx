@@ -24,6 +24,7 @@ import { updateDateParams } from '../components/search/date-range-model';
 import { buildLocalDateDistribution, filterItemsByDateRange } from '../components/search/local-date-range-model';
 
 const PAGE_SIZE = 30;
+const PROGRESS_RECORD_LIMIT = 1000;
 
 export function DownloadsPage() {
   const { t } = useTranslation();
@@ -55,7 +56,10 @@ export function DownloadsPage() {
     queryKey: ['downloads', 'ids'],
     queryFn: getDownloadEntries,
   });
-  const articleIds = downloadEntries?.map((entry) => entry.articleId);
+  const articleIds = useMemo(
+    () => downloadEntries?.map((entry) => entry.articleId),
+    [downloadEntries],
+  );
 
   // Fetch all articles in bulk
   const { data: allArticles, isLoading: articlesLoading } = useAllArticles(
@@ -63,10 +67,11 @@ export function DownloadsPage() {
     articleIds,
   );
 
-  // Also fetch current page downloads for progress tracking
+  // Progress only needs recent records. Avoid loading up to 10,000 full rows
+  // every time the downloads tab is opened.
   const { data: downloadData } = useQuery({
     queryKey: ['downloads', 'progress'],
-    queryFn: () => getDownloads(0, 10000),
+    queryFn: () => getDownloads(0, PROGRESS_RECORD_LIMIT),
     refetchInterval: (query) => {
       const downloads = query.state.data?.downloads;
       if (downloads?.some((dl) => dl.Status === 'downloading')) {
@@ -114,23 +119,34 @@ export function DownloadsPage() {
 
   // Filter articles based on search query
   const searchFilteredArticles = useLocalArticleSearch(allArticles ?? []);
-  const downloadDateByArticle = new Map(downloadEntries?.map((entry) => [entry.articleId, entry.date]));
-  const dateDistribution = buildLocalDateDistribution(
-    searchFilteredArticles.map((article) => downloadDateByArticle.get(String(article.Id)) ?? ''),
+  const downloadDateByArticle = useMemo(
+    () => new Map(downloadEntries?.map((entry) => [entry.articleId, entry.date])),
+    [downloadEntries],
   );
-  const filteredArticles = filterItemsByDateRange(
-    searchFilteredArticles,
-    (article) => downloadDateByArticle.get(String(article.Id)) ?? '',
-    from,
-    to,
+  const dateDistribution = useMemo(
+    () => buildLocalDateDistribution(
+      searchFilteredArticles.map((article) => downloadDateByArticle.get(String(article.Id)) ?? ''),
+    ),
+    [searchFilteredArticles, downloadDateByArticle],
+  );
+  const filteredArticles = useMemo(
+    () => filterItemsByDateRange(
+      searchFilteredArticles,
+      (article) => downloadDateByArticle.get(String(article.Id)) ?? '',
+      from,
+      to,
+    ),
+    [searchFilteredArticles, downloadDateByArticle, from, to],
   );
 
   // Paginate/slice filtered results for display
   const totalPages = Math.ceil(filteredArticles.length / PAGE_SIZE);
-  const displayArticles =
-    scrollMode === 'infinite'
+  const displayArticles = useMemo(
+    () => scrollMode === 'infinite'
       ? filteredArticles.slice(0, visibleCount)
-      : filteredArticles.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+      : filteredArticles.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+    [filteredArticles, scrollMode, visibleCount, page],
+  );
 
   const keyboardSelectedId = useResultGridKeyboard(
     displayArticles,
