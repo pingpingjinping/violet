@@ -29,20 +29,35 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
+        slot_seconds=21600
+        retry_seconds=600
+
+        next_slot_epoch() {
+          now=$$(date +%s)
+          echo $$(( ((now / slot_seconds) + 1) * slot_seconds ))
+        }
+
         while true; do
-          echo "[fast-hsync] starting scheduled sync"
-          fast-hsync /content-data/data.db
-          status=$$?
-          if [ "$$status" -eq 0 ]; then
-            echo "[fast-hsync] scheduled sync completed"
-          else
-            echo "[fast-hsync] scheduled sync failed with exit code $$status" >&2
-          fi
-          echo "[fast-hsync] next sync in $${HSYNC_INTERVAL_SECONDS}s"
-          sleep "$${HSYNC_INTERVAL_SECONDS}"
+          target=$$(next_slot_epoch)
+          wait_seconds=$$((target - $$(date +%s)))
+          echo "[fast-hsync] next scheduled sync at $$(TZ=Asia/Seoul date -d "@$$target" '+%Y-%m-%d %H:%M:%S %Z')"
+          sleep "$$wait_seconds"
+
+          while true; do
+            echo "[fast-hsync] starting scheduled sync at $$(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M:%S %Z')"
+            fast-hsync /content-data/data.db
+            status=$$?
+            if [ "$$status" -eq 0 ]; then
+              echo "[fast-hsync] scheduled sync completed"
+              break
+            fi
+
+            echo "[fast-hsync] scheduled sync failed with exit code $$status; retrying in $${retry_seconds}s" >&2
+            sleep "$$retry_seconds"
+          done
         done
     environment:
-      HSYNC_INTERVAL_SECONDS: ${HSYNC_INTERVAL_SECONDS:-3600}
+      TZ: Asia/Seoul
       FAST_HSYNC_QUIET: "1"
     volumes:
       - violet-content-db:/content-data
