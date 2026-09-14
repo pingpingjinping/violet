@@ -1,5 +1,5 @@
 import { ScopedMessageSearchButton } from '../components/message-search/ScopedMessageSearchButton';
-import { useCallback, useState, useEffect, useRef } from 'react';
+import { useCallback, useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useCropBookmarks, useDeleteCropBookmark } from '../hooks/useBookmarks';
@@ -42,15 +42,20 @@ export function CropBookmarksPage() {
     [deleteCropMutation],
   );
 
-  const displayCrops = showUserBookmarks
-    ? (userCropBookmarks ?? [])
-    : (cropBookmarks ?? []);
+  const displayCrops = useMemo(
+    () => showUserBookmarks ? (userCropBookmarks ?? []) : (cropBookmarks ?? []),
+    [showUserBookmarks, userCropBookmarks, cropBookmarks],
+  );
   const cropsLoading = showUserBookmarks ? isUserLoading : isLoading;
 
   // Fetch all articles in bulk for tag summary
-  const uniqueArticleIds = [...new Set(displayCrops.map((crop) => crop.Article))];
+  const uniqueArticleIds = useMemo(
+    () => [...new Set(displayCrops.map((crop) => crop.Article))],
+    [displayCrops],
+  );
+  const articleIds = useMemo(() => uniqueArticleIds.map(String), [uniqueArticleIds]);
   const { data: articles = [], isLoading: articlesLoading } = useAllArticles(
-    `crop-bookmarks-${showUserBookmarks}`, uniqueArticleIds.map(String),
+    `crop-bookmarks-${showUserBookmarks}`, articleIds,
   );
   const loading = cropsLoading || articlesLoading;
 
@@ -78,16 +83,26 @@ export function CropBookmarksPage() {
   }, [showUserBookmarks, resetTags]);
 
   // Filter crops based on filtered articles
-  const filteredArticleIds = new Set(filteredArticles.map((a) => a.Id));
-  const tagFilteredCrops = displayCrops.filter((crop) =>
-    filteredArticleIds.has(crop.Article),
+  const filteredArticleIds = useMemo(
+    () => new Set(filteredArticles.map((a) => a.Id)),
+    [filteredArticles],
   );
-  const dateDistribution = buildLocalDateDistribution(
-    showUserBookmarks ? [] : tagFilteredCrops.map((crop) => crop.DateTime),
+  const tagFilteredCrops = useMemo(
+    () => displayCrops.filter((crop) => filteredArticleIds.has(crop.Article)),
+    [displayCrops, filteredArticleIds],
   );
-  const filteredCrops = showUserBookmarks
-    ? tagFilteredCrops
-    : filterItemsByDateRange(tagFilteredCrops, (crop) => crop.DateTime, from, to);
+  const dateDistribution = useMemo(
+    () => buildLocalDateDistribution(
+      showUserBookmarks ? [] : tagFilteredCrops.map((crop) => crop.DateTime),
+    ),
+    [showUserBookmarks, tagFilteredCrops],
+  );
+  const filteredCrops = useMemo(
+    () => showUserBookmarks
+      ? tagFilteredCrops
+      : filterItemsByDateRange(tagFilteredCrops, (crop) => crop.DateTime, from, to),
+    [showUserBookmarks, tagFilteredCrops, from, to],
+  );
 
   const keyboardSelectedKey = useMasonryCropKeyboard(
     filteredCrops,
