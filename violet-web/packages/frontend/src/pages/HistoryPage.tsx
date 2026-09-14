@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
@@ -50,7 +50,10 @@ export function HistoryPage() {
     queryKey: ['readHistory', 'ids'],
     queryFn: getHistoryEntries,
   });
-  const articleIds = historyEntries?.map((entry) => entry.articleId);
+  const articleIds = useMemo(
+    () => historyEntries?.map((entry) => entry.articleId),
+    [historyEntries],
+  );
 
   // Fetch all articles in bulk
   const { data: allArticles, isLoading: articlesLoading } = useAllArticles(
@@ -65,23 +68,34 @@ export function HistoryPage() {
 
   // Filter articles based on search query
   const searchFilteredArticles = useLocalArticleSearch(allArticles ?? []);
-  const historyDateByArticle = new Map(historyEntries?.map((entry) => [entry.articleId, entry.date]));
-  const dateDistribution = buildLocalDateDistribution(
-    searchFilteredArticles.map((article) => historyDateByArticle.get(String(article.Id)) ?? ''),
+  const historyDateByArticle = useMemo(
+    () => new Map(historyEntries?.map((entry) => [entry.articleId, entry.date])),
+    [historyEntries],
   );
-  const filteredArticles = filterItemsByDateRange(
-    searchFilteredArticles,
-    (article) => historyDateByArticle.get(String(article.Id)) ?? '',
-    from,
-    to,
+  const dateDistribution = useMemo(
+    () => buildLocalDateDistribution(
+      searchFilteredArticles.map((article) => historyDateByArticle.get(String(article.Id)) ?? ''),
+    ),
+    [searchFilteredArticles, historyDateByArticle],
+  );
+  const filteredArticles = useMemo(
+    () => filterItemsByDateRange(
+      searchFilteredArticles,
+      (article) => historyDateByArticle.get(String(article.Id)) ?? '',
+      from,
+      to,
+    ),
+    [searchFilteredArticles, historyDateByArticle, from, to],
   );
 
   // Paginate/slice filtered results for display
   const totalPages = Math.ceil(filteredArticles.length / PAGE_SIZE);
-  const displayArticles =
-    scrollMode === 'infinite'
+  const displayArticles = useMemo(
+    () => scrollMode === 'infinite'
       ? filteredArticles.slice(0, visibleCount)
-      : filteredArticles.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+      : filteredArticles.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+    [filteredArticles, scrollMode, visibleCount, page],
+  );
 
   const keyboardSelectedId = useResultGridKeyboard(
     displayArticles,
