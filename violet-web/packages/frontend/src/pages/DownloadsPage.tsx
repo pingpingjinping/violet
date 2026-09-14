@@ -24,7 +24,7 @@ import { updateDateParams } from '../components/search/date-range-model';
 import { buildLocalDateDistribution, filterItemsByDateRange } from '../components/search/local-date-range-model';
 
 const PAGE_SIZE = 30;
-const PROGRESS_RECORD_LIMIT = 1000;
+const PROGRESS_RECORD_LIMIT = 200;
 
 export function DownloadsPage() {
   const { t } = useTranslation();
@@ -67,7 +67,7 @@ export function DownloadsPage() {
     articleIds,
   );
 
-  // Progress only needs recent records. Avoid loading up to 10,000 full rows
+  // Progress only needs recent records. Avoid loading thousands of full rows
   // every time the downloads tab is opened.
   const { data: downloadData } = useQuery({
     queryKey: ['downloads', 'progress'],
