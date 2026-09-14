@@ -9,7 +9,7 @@ import { BookmarksPage } from '../pages/BookmarksPage';
 import { CropBookmarksPage } from '../pages/CropBookmarksPage';
 import { HistoryPage } from '../pages/HistoryPage';
 import { DownloadsPage } from '../pages/DownloadsPage';
-const SettingsPage = lazy(() => import('../pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
+import { SettingsPage } from '../pages/SettingsPage';
 import { AiSearchPage } from '../pages/AiSearchPage';
 import { MessageSearchPage } from '../pages/MessageSearchPage';
 import { LlmSearchPage } from '../pages/LlmSearchPage';
@@ -37,7 +37,7 @@ export function AppRoutes() {
         <Route path="work-experiment" element={<Suspense fallback={<LoadingSpinner />}><WorkExperimentPage /></Suspense>} />
         <Route path="author-similarity" element={<Suspense fallback={<LoadingSpinner />}><AuthorSimilarityPage /></Suspense>} />
         <Route path="activity" element={<Suspense fallback={<LoadingSpinner />}><ActivityPage /></Suspense>} />
-        <Route path="settings" element={<Suspense fallback={<LoadingSpinner />}><SettingsPage /></Suspense>} />
+        <Route path="settings" element={<SettingsPage />} />
       </Route>
       <Route path="viewer/:id" element={<ViewerPage />} />
     </Routes>
