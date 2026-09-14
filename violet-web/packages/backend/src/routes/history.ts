@@ -42,12 +42,23 @@ historyRouter.get('/last-page/:article', (req, res) => {
   const db = getUserDb();
   const row = db
     .prepare(
-      `SELECT LastPage FROM ArticleReadLog
-       WHERE Article = ? AND LastPage > 0
-       ORDER BY Id DESC LIMIT 1`,
+      `SELECT
+         (SELECT LastPage FROM ArticleReadLog
+          WHERE Article = ? AND LastPage > 0
+          ORDER BY Id DESC LIMIT 1) AS LastPage,
+         (SELECT DateTimeEnd FROM ArticleReadLog
+          WHERE Article = ?
+          ORDER BY Id DESC LIMIT 1) AS DateTimeEnd`,
     )
-    .get(article) as { LastPage: number } | undefined;
-  res.json({ lastPage: row?.LastPage ?? null });
+    .get(article, article) as
+      | { LastPage: number | null; DateTimeEnd: string | null }
+      | undefined;
+
+  const latestTime = row?.DateTimeEnd ? Date.parse(row.DateTimeEnd) : 0;
+  res.json({
+    lastPage: row?.LastPage ?? null,
+    latestTime: Number.isFinite(latestTime) ? latestTime : 0,
+  });
 });
 
 historyRouter.post('/', (req, res) => {
