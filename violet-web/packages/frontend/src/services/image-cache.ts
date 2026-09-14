@@ -218,12 +218,20 @@ export async function getCacheStats(): Promise<{ totalSizeBytes: number; itemCou
     return new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const store = tx.objectStore(STORE_NAME);
-      const request = store.getAll();
+      const request = store.openCursor();
+      let totalSizeBytes = 0;
+      let itemCount = 0;
 
       request.onsuccess = () => {
-        const items = request.result as CachedImage[];
-        const totalSizeBytes = items.reduce((sum, item) => sum + item.size, 0);
-        resolve({ totalSizeBytes, itemCount: items.length });
+        const cursor = request.result;
+        if (!cursor) {
+          resolve({ totalSizeBytes, itemCount });
+          return;
+        }
+        const item = cursor.value as CachedImage;
+        totalSizeBytes += item.size || 0;
+        itemCount++;
+        cursor.continue();
       };
 
       request.onerror = () => resolve({ totalSizeBytes: 0, itemCount: 0 });
