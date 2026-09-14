@@ -188,6 +188,27 @@
       "clearCache": "캐시 지우기",
       "clearing": "삭제 중..."
     },
+    "exhentaiCookie": {
+      "heading": "ExHentai 쿠키",
+      "description": "Hitomi에서 찾지 못한 작품을 ExHentai에서 불러올 때 사용합니다. E-Hentai 공개 작품에는 쿠키가 필요하지 않습니다.",
+      "status": "상태:",
+      "source": "저장 위치:",
+      "configured": "설정됨",
+      "notConfigured": "설정 안 됨",
+      "stored": "웹 설정 파일",
+      "environment": ".env 환경변수",
+      "cookieLabel": "ExHentai Cookie 전체 값",
+      "cookiePlaceholder": "ipb_member_id=...; ipb_pass_hash=...; igneous=...",
+      "requiredValues": "ipb_member_id, ipb_pass_hash, igneous가 모두 필요합니다.",
+      "save": "쿠키 저장",
+      "remove": "저장된 쿠키 삭제",
+      "working": "처리 중...",
+      "saved": "쿠키를 저장했습니다. 다음 요청부터 바로 적용됩니다.",
+      "removed": "웹에 저장한 쿠키를 삭제했습니다.",
+      "error": "처리하지 못했습니다. 쿠키 형식과 서버 로그를 확인하세요.",
+      "environmentHint": ".env 쿠키가 사용 중입니다. 제거하려면 Pi의 .env를 수정하고 웹 컨테이너를 다시 만드세요.",
+      "securityNote": "쿠키는 로그인 정보입니다. 이 서버를 외부 인터넷에 공개하지 마세요. 저장된 값은 화면이나 API로 다시 표시되지 않습니다."
+    },
     "sync": {
       "heading": "데이터베이스 동기화",
       "database": "데이터베이스:",

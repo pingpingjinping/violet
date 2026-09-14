@@ -163,6 +163,27 @@
       "enableDesc": "在导航栏中显示AI搜索标签页",
       "helpText": "AI搜索需要单独运行violet-search服务器。要使用此功能，请先设置并运行violet-search服务。"
     },
+    "exhentaiCookie": {
+      "heading": "ExHentai Cookie",
+      "description": "当 Hitomi 元数据不可用时，用于从 ExHentai 加载画廊。公开的 E-Hentai 画廊不需要 Cookie。",
+      "status": "状态：",
+      "source": "来源：",
+      "configured": "已设置",
+      "notConfigured": "未设置",
+      "stored": "网页设置文件",
+      "environment": ".env 环境变量",
+      "cookieLabel": "完整的 ExHentai Cookie 值",
+      "cookiePlaceholder": "ipb_member_id=...; ipb_pass_hash=...; igneous=...",
+      "requiredValues": "必须包含 ipb_member_id、ipb_pass_hash 和 igneous。",
+      "save": "保存 Cookie",
+      "remove": "删除已保存的 Cookie",
+      "working": "处理中...",
+      "saved": "Cookie 已保存，将从下一个请求开始使用。",
+      "removed": "已删除网页设置中保存的 Cookie。",
+      "error": "操作失败，请检查 Cookie 格式和服务器日志。",
+      "environmentHint": "当前正在使用 .env Cookie。若要删除，请编辑 Pi 上的 .env 并重新创建网页容器。",
+      "securityNote": "Cookie 属于登录信息。请勿将此服务器暴露到公网。保存的值不会返回到页面或 API。"
+    },
     "sync": {
       "heading": "数据库同步",
       "database": "数据库:",

@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { Response } from 'express';
+import { getEhCookie } from './eh-cookie-store.js';
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -10,13 +11,6 @@ const ehPageCache = new Map<string, { url: string; timestamp: number }>();
 export interface ResolvedImageSource {
   url: string;
   headers: Record<string, string>;
-}
-
-function getEhCookie(): string | null {
-  const cookie = process.env.EXHENTAI_COOKIE?.trim();
-  if (!cookie) return null;
-  if (/[\r\n]/.test(cookie)) throw new Error('EXHENTAI_COOKIE contains invalid characters');
-  return cookie;
 }
 
 function isEhGalleryHost(hostname: string): boolean {

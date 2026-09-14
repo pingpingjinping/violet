@@ -163,6 +163,27 @@
       "enableDesc": "ナビゲーションにAI検索タブを表示します",
       "helpText": "AI検索を使用するには、violet-searchサーバーを別途起動する必要があります。この機能を使用するには、violet-searchサービスをセットアップして実行してください。"
     },
+    "exhentaiCookie": {
+      "heading": "ExHentai Cookie",
+      "description": "Hitomiのメタデータが見つからない作品をExHentaiから読み込むために使用します。公開E-Hentai作品にはCookieは不要です。",
+      "status": "状態:",
+      "source": "保存元:",
+      "configured": "設定済み",
+      "notConfigured": "未設定",
+      "stored": "Web設定ファイル",
+      "environment": ".env環境変数",
+      "cookieLabel": "ExHentai Cookieの全体値",
+      "cookiePlaceholder": "ipb_member_id=...; ipb_pass_hash=...; igneous=...",
+      "requiredValues": "ipb_member_id、ipb_pass_hash、igneousがすべて必要です。",
+      "save": "Cookieを保存",
+      "remove": "保存したCookieを削除",
+      "working": "処理中...",
+      "saved": "Cookieを保存しました。次のリクエストから適用されます。",
+      "removed": "Web設定に保存されたCookieを削除しました。",
+      "error": "処理できませんでした。Cookieの形式とサーバーログを確認してください。",
+      "environmentHint": ".envのCookieが使用中です。削除するにはPiの.envを編集し、Webコンテナを再作成してください。",
+      "securityNote": "Cookieはログイン情報です。このサーバーを外部インターネットに公開しないでください。保存値は画面やAPIに返されません。"
+    },
     "sync": {
       "heading": "データベース同期",
       "database": "データベース:",

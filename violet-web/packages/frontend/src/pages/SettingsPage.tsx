@@ -11,6 +11,12 @@ import { useLlmSearchStatus } from '../hooks/useLlmSearchStatus';
 import { useSuggestions } from '../hooks/useSuggestions';
 import { useTagTranslation } from '../hooks/useTagTranslation';
 import { getCacheStats, clearAllCache } from '../services/image-cache';
+import {
+  getExhentaiCookieStatus,
+  removeExhentaiCookie,
+  saveExhentaiCookie,
+  type ExhentaiCookieStatus,
+} from '../api/exhentai-cookie';
 import styles from './SettingsPage.module.css';
 
 const themeColors = [
@@ -39,10 +45,52 @@ export function SettingsPage() {
 
   const [cacheStats, setCacheStats] = useState<{ totalSizeBytes: number; itemCount: number }>({ totalSizeBytes: 0, itemCount: 0 });
   const [isClearing, setIsClearing] = useState(false);
+  const [exhentaiCookie, setExhentaiCookie] = useState('');
+  const [exhentaiCookieStatus, setExhentaiCookieStatus] = useState<ExhentaiCookieStatus>({
+    configured: false,
+    source: null,
+  });
+  const [exhentaiCookieBusy, setExhentaiCookieBusy] = useState(false);
+  const [exhentaiCookieMessage, setExhentaiCookieMessage] = useState<
+    'saved' | 'removed' | 'error' | null
+  >(null);
 
   useEffect(() => {
     getCacheStats().then(setCacheStats);
+    getExhentaiCookieStatus()
+      .then(setExhentaiCookieStatus)
+      .catch(() => setExhentaiCookieMessage('error'));
   }, []);
+
+  const handleSaveExhentaiCookie = async () => {
+    setExhentaiCookieBusy(true);
+    setExhentaiCookieMessage(null);
+    try {
+      const status = await saveExhentaiCookie(exhentaiCookie);
+      setExhentaiCookieStatus(status);
+      setExhentaiCookie('');
+      setExhentaiCookieMessage('saved');
+    } catch {
+      setExhentaiCookieMessage('error');
+    } finally {
+      setExhentaiCookieBusy(false);
+    }
+  };
+
+  const handleRemoveExhentaiCookie = async () => {
+    setExhentaiCookieBusy(true);
+    setExhentaiCookieMessage(null);
+    try {
+      const status = await removeExhentaiCookie();
+      setExhentaiCookieStatus(status);
+      setExhentaiCookie('');
+      setExhentaiCookieMessage('removed');
+    } catch {
+      setExhentaiCookieMessage('error');
+    } finally {
+      setExhentaiCookieBusy(false);
+    }
+  };
 
   const handleClearCache = async () => {
     setIsClearing(true);
@@ -682,6 +730,77 @@ export function SettingsPage() {
             </div>
           </>
         )}
+      </div>
+
+      <div className={styles.section}>
+        <h3 className={styles.subheading}>{t('settings.exhentaiCookie.heading')}</h3>
+        <p className={styles.themeDesc}>{t('settings.exhentaiCookie.description')}</p>
+
+        <div className={styles.syncInfo}>
+          <div className={styles.infoRow}>
+            <span className={styles.label}>{t('settings.exhentaiCookie.status')}</span>
+            <span className={exhentaiCookieStatus.configured ? styles.statusOk : styles.statusError}>
+              {exhentaiCookieStatus.configured
+                ? t('settings.exhentaiCookie.configured')
+                : t('settings.exhentaiCookie.notConfigured')}
+            </span>
+          </div>
+          {exhentaiCookieStatus.source && (
+            <div className={styles.infoRow}>
+              <span className={styles.label}>{t('settings.exhentaiCookie.source')}</span>
+              <span>
+                {t(`settings.exhentaiCookie.${exhentaiCookieStatus.source}`)}
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className={styles.settingGroup}>
+          <label className={styles.settingLabel}>{t('settings.exhentaiCookie.cookieLabel')}</label>
+          <input
+            type="password"
+            className={styles.tagInput}
+            value={exhentaiCookie}
+            onChange={(event) => setExhentaiCookie(event.target.value)}
+            placeholder={t('settings.exhentaiCookie.cookiePlaceholder')}
+            autoComplete="off"
+            spellCheck={false}
+            disabled={exhentaiCookieBusy}
+          />
+          <p className={styles.themeDesc}>{t('settings.exhentaiCookie.requiredValues')}</p>
+        </div>
+
+        <div className={styles.syncButtons}>
+          <button
+            className={styles.syncBtn}
+            onClick={handleSaveExhentaiCookie}
+            disabled={exhentaiCookieBusy || !exhentaiCookie.trim()}
+          >
+            {exhentaiCookieBusy
+              ? t('settings.exhentaiCookie.working')
+              : t('settings.exhentaiCookie.save')}
+          </button>
+          <button
+            className={styles.fullSyncBtn}
+            onClick={handleRemoveExhentaiCookie}
+            disabled={exhentaiCookieBusy || exhentaiCookieStatus.source !== 'stored'}
+          >
+            {t('settings.exhentaiCookie.remove')}
+          </button>
+        </div>
+
+        {exhentaiCookieMessage && (
+          <div className={styles.statusMessage}>
+            <span className={exhentaiCookieMessage === 'error' ? styles.statusError : styles.statusOk}>
+              {t(`settings.exhentaiCookie.${exhentaiCookieMessage}`)}
+            </span>
+          </div>
+        )}
+
+        {exhentaiCookieStatus.source === 'environment' && (
+          <p className={styles.themeDesc}>{t('settings.exhentaiCookie.environmentHint')}</p>
+        )}
+        <p className={styles.themeDesc}>{t('settings.exhentaiCookie.securityNote')}</p>
       </div>
 
       <div className={styles.section}>

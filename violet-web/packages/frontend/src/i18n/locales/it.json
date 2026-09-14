@@ -163,6 +163,27 @@
       "enableDesc": "Mostra la scheda Ricerca AI nella navigazione",
       "helpText": "La ricerca AI richiede il server violet-search in esecuzione separatamente. È necessario configurare e avviare il servizio violet-search per utilizzare questa funzione."
     },
+    "exhentaiCookie": {
+      "heading": "Cookie ExHentai",
+      "description": "Usato per caricare le gallerie da ExHentai quando i metadati di Hitomi non sono disponibili. Le gallerie pubbliche di E-Hentai non richiedono cookie.",
+      "status": "Stato:",
+      "source": "Origine:",
+      "configured": "Configurato",
+      "notConfigured": "Non configurato",
+      "stored": "File delle impostazioni web",
+      "environment": "Variabile d'ambiente .env",
+      "cookieLabel": "Valore completo del cookie ExHentai",
+      "cookiePlaceholder": "ipb_member_id=...; ipb_pass_hash=...; igneous=...",
+      "requiredValues": "Sono necessari ipb_member_id, ipb_pass_hash e igneous.",
+      "save": "Salva cookie",
+      "remove": "Rimuovi cookie salvato",
+      "working": "Elaborazione...",
+      "saved": "Cookie salvato. Sarà usato dalla prossima richiesta.",
+      "removed": "Il cookie salvato nelle impostazioni web è stato rimosso.",
+      "error": "Impossibile completare la richiesta. Controlla il formato del cookie e il log del server.",
+      "environmentHint": "È attivo un cookie .env. Modifica .env sul Pi e ricrea il container web per rimuoverlo.",
+      "securityNote": "Il cookie contiene informazioni di accesso. Non esporre questo server a Internet. Il valore salvato non viene mai restituito alla pagina o all'API."
+    },
     "sync": {
       "heading": "Sincronizzazione database",
       "database": "Database:",
