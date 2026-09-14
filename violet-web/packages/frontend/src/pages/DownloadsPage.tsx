@@ -24,7 +24,7 @@ import { updateDateParams } from '../components/search/date-range-model';
 import { buildLocalDateDistribution, filterItemsByDateRange } from '../components/search/local-date-range-model';
 
 const PAGE_SIZE = 30;
-const PROGRESS_RECORD_LIMIT = 200;
+const PROGRESS_RECORD_LIMIT = 50;
 
 export function DownloadsPage() {
   const { t } = useTranslation();
