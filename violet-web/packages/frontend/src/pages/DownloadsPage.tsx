@@ -36,6 +36,7 @@ export function DownloadsPage() {
   const page = parseInt(searchParams.get('p') || '0');
   const from = searchParams.get('from') || undefined;
   const to = searchParams.get('to') || undefined;
+  const hasActiveFilters = Boolean(searchParams.get('q')?.trim() || from || to);
   const setPage = useCallback(
     (updater: number | ((prev: number) => number)) => {
       const newPage = typeof updater === 'function' ? updater(page) : updater;
@@ -50,8 +51,10 @@ export function DownloadsPage() {
     [page, searchParams, setSearchParams],
   );
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [loadAllArticles, setLoadAllArticles] = useState(false);
 
-  // Fetch all download article IDs
+  // Fetch download IDs/dates first. This payload is much lighter than full
+  // article metadata and lets the first visible page start immediately.
   const { data: downloadEntries, isLoading: idsLoading } = useQuery({
     queryKey: ['downloads', 'ids'],
     queryFn: getDownloadEntries,
@@ -60,11 +63,37 @@ export function DownloadsPage() {
     () => downloadEntries?.map((entry) => entry.articleId),
     [downloadEntries],
   );
+  const initialArticleIds = useMemo(
+    () => articleIds?.slice(0, PAGE_SIZE),
+    [articleIds],
+  );
 
-  // Fetch all articles in bulk
-  const { data: allArticles, isLoading: articlesLoading } = useAllArticles(
+  // Load only the first screen first so opening the tab does not wait for the
+  // entire download library.
+  const { data: initialArticles, isLoading: initialArticlesLoading } = useAllArticles(
+    'downloads-initial',
+    initialArticleIds,
+  );
+
+  // After the first page is available, fetch the remaining article metadata in
+  // the background. Deep-linked pages and active filters need the full set for
+  // correct results, so they skip the deferred phase.
+  useEffect(() => {
+    if (!articleIds || articleIds.length <= PAGE_SIZE) return;
+    if (hasActiveFilters || page > 0) {
+      setLoadAllArticles(true);
+      return;
+    }
+    if (initialArticlesLoading || !initialArticles) return;
+
+    const timer = window.setTimeout(() => setLoadAllArticles(true), 100);
+    return () => window.clearTimeout(timer);
+  }, [articleIds, hasActiveFilters, page, initialArticles, initialArticlesLoading]);
+
+  const backgroundArticleIds = loadAllArticles ? articleIds : undefined;
+  const { data: allArticles, isLoading: allArticlesLoading } = useAllArticles(
     'downloads',
-    articleIds,
+    backgroundArticleIds,
   );
 
   // Progress only needs recent records. Avoid loading thousands of full rows
@@ -112,13 +141,23 @@ export function DownloadsPage() {
     prevStatusRef.current = newMap;
   }, [currentDownloads, addToast, t]);
 
-  const isLoading = idsLoading || articlesLoading;
+  const initialLoading = idsLoading || initialArticlesLoading;
+  const fullLoadPending = Boolean(
+    articleIds && articleIds.length > PAGE_SIZE && !allArticles,
+  );
+  const requiresFullBeforeDisplay = hasActiveFilters || page > 0;
+  const displayLoading = initialLoading || (requiresFullBeforeDisplay && fullLoadPending);
+  const controlsLoading = initialLoading || fullLoadPending || allArticlesLoading;
+  const effectiveArticles = allArticles ?? (
+    requiresFullBeforeDisplay ? [] : initialArticles ?? []
+  );
 
-  // Tag summary from ALL articles
-  const tagSummary = useArticleTagSummary(allArticles ?? []);
+  // Tag summary uses the full set once background loading finishes. Until then
+  // the grid can already show the first page while search controls stay loading.
+  const tagSummary = useArticleTagSummary(effectiveArticles);
 
   // Filter articles based on search query
-  const searchFilteredArticles = useLocalArticleSearch(allArticles ?? []);
+  const searchFilteredArticles = useLocalArticleSearch(effectiveArticles);
   const downloadDateByArticle = useMemo(
     () => new Map(downloadEntries?.map((entry) => [entry.articleId, entry.date])),
     [downloadEntries],
@@ -183,10 +222,10 @@ export function DownloadsPage() {
         selectedTags={selectedTags}
         onTagToggle={handleTagToggle}
         resultCount={filteredArticles.length}
-        isLoading={isLoading}
+        isLoading={controlsLoading}
         sticky
         extraControls={<ScopedMessageSearchButton articleIds={filteredArticles.map((article) => article.Id)}
-          label={t('nav.downloads')} disabled={isLoading} completedOnly />}
+          label={t('nav.downloads')} disabled={controlsLoading} completedOnly />}
         dateRangeContent={
           <DateRangeFilter
             compact
@@ -194,7 +233,7 @@ export function DownloadsPage() {
             from={from}
             to={to}
             distributionData={dateDistribution}
-            distributionLoading={isLoading}
+            distributionLoading={controlsLoading}
             onCommit={(nextFrom, nextTo) =>
               setSearchParams(updateDateParams(searchParams, nextFrom, nextTo))
             }
@@ -205,8 +244,8 @@ export function DownloadsPage() {
       <DownloadProgressProvider value={downloadProgressMap}>
         {scrollMode === 'infinite' ? (
           <>
-            {isLoading && <LoadingSpinner />}
-            {!isLoading && (
+            {displayLoading && <LoadingSpinner />}
+            {!displayLoading && (
               <InfiniteScroll
                 hasMore={hasMore}
                 loading={false}
@@ -222,8 +261,8 @@ export function DownloadsPage() {
           </>
         ) : (
           <>
-            {isLoading && <LoadingSpinner />}
-            {!isLoading && (
+            {displayLoading && <LoadingSpinner />}
+            {!displayLoading && (
               <SearchResultGrid
                 articles={displayArticles}
                 keyboardSelectedId={keyboardSelectedId}
@@ -231,7 +270,7 @@ export function DownloadsPage() {
               />
             )}
 
-            {totalPages > 1 && (
+            {!displayLoading && totalPages > 1 && (
               <div className={styles.pagination}>
                 <button disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
                   {t('home.prev')}
