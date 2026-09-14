@@ -34,13 +34,11 @@ export async function getHistoryEntries(): Promise<HistoryDateEntry[]> {
   return [...latest].map(([articleId, date]) => ({ articleId, date })).sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
 }
 export async function getLastPage(article: string): Promise<number | null> {
-  const { data } = await api.get<{ lastPage: number | null }>(`/history/last-page/${article}`);
+  const { data } = await api.get<{ lastPage: number | null; latestTime: number }>(`/history/last-page/${article}`);
   const remote = (await getSharedActivity()).find(r => r.kind === 'read' && r.article === article);
   if (!remote) return data.lastPage;
   if (data.lastPage === null) return remote.page;
-  const local = (await getLocalHistory()).filter(r => r.Article === article && r.DateTimeEnd !== null);
-  const latestTime = local.reduce((time, r) => Math.max(time, Date.parse(r.DateTimeEnd ?? r.DateTimeStart) || 0), 0);
-  return remote.timestamp > latestTime ? remote.page : data.lastPage;
+  return remote.timestamp > data.latestTime ? remote.page : data.lastPage;
 }
 export async function insertReadLog(req: InsertReadLogRequest): Promise<{ Id: number }> {
   const { data } = await api.post<{ Id: number }>('/history', req);
