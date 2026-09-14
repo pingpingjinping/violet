@@ -9,15 +9,7 @@
     "history": "Historio",
     "downloads": "Elŝutoj",
     "aiSearch": "AI-Serĉo",
-    "settings": "Agordoj",
-    "hot": "Hot",
-    "messageSearch": "Mesaĝoj",
-    "llmSearch": "LLM Search",
-    "keywordGraph": "Keyword Graph",
-    "workExperiment": "Experiment",
-    "authorSimilarity": "Similar Authors",
-    "activity": "Activity",
-    "more": "Pli"
+    "settings": "Agordoj"
   },
   "home": {
     "heading": "Foliumi",
@@ -34,9 +26,7 @@
     "suggestions": "Sugestoj",
     "recentSearches": "Lastaj serĉoj",
     "clearRecent": "Forigi",
-    "includeQuery": "Inkluzivi \"{{query}}\"",
-    "expandTags": "Montri ĉiujn etikedojn",
-    "collapseTags": "Montri unu vicon"
+    "openInApp": "Malfermi en aplikaĵo"
   },
   "article": {
     "artist": "Artisto",
@@ -56,17 +46,9 @@
     "addBookmark": "Aldoni legosignon",
     "add": "Aldoni",
     "cancel": "Nuligi",
-    "uncategorized": "Nekategoriita"
-  },
-  "hot": {
-    "heading": "Hot",
-    "daily": "Daily",
-    "weekly": "Weekly",
-    "monthly": "Monthly",
-    "alltime": "All Time",
-    "setupRequired": "Developer mode and HMAC salt required.",
-    "setupHint": "Enable Developer Mode in Settings and configure HMAC Salt.",
-    "error": "Failed to load. Check developer settings."
+    "uncategorized": "Nekategoriita",
+    "import": "Importi",
+    "export": "Eksporti"
   },
   "history": {
     "heading": "Historio"
@@ -141,11 +123,6 @@
       "pagination": "Paĝigo",
       "infinite": "Senfina rulumado"
     },
-    "viewer": {
-      "heading": "Vidilo",
-      "resumePrompt": "Demandi pri daŭrigo",
-      "resumePromptDesc": "Montri demandon por salti al la laste legita paĝo kiam verko malfermiĝas"
-    },
     "tagTranslation": {
       "heading": "Etikeda traduko",
       "korean": "Korea",
@@ -163,13 +140,37 @@
       "enableDesc": "Montri AI-Serĉan langeton en navigado",
       "helpText": "AI-Serĉo bezonas la violet-search servilon rulantan aparte. Vi devas agordi kaj ruli la violet-search servon por uzi ĉi tiun funkcion."
     },
+    "exhentaiCookie": {
+      "heading": "ExHentai-kuketo",
+      "description": "Uzata por ŝargi galeriojn de ExHentai kiam la metadatumoj de Hitomi ne disponeblas. Publikaj galerioj de E-Hentai ne bezonas kuketon.",
+      "status": "Stato:",
+      "source": "Fonto:",
+      "configured": "Agordita",
+      "notConfigured": "Ne agordita",
+      "stored": "Dosiero de retaj agordoj",
+      "environment": ".env-media variablo",
+      "cookieLabel": "Kompleta valoro de ExHentai-kuketo",
+      "cookiePlaceholder": "ipb_member_id=...; ipb_pass_hash=...; igneous=...",
+      "requiredValues": "ipb_member_id, ipb_pass_hash kaj igneous estas ĉiuj bezonataj.",
+      "save": "Konservi kuketon",
+      "remove": "Forigi konservitan kuketon",
+      "working": "Prilaborante...",
+      "saved": "La kuketo estas konservita kaj estos uzata ekde la sekva peto.",
+      "removed": "La kuketo konservita per la retaj agordoj estis forigita.",
+      "error": "La peto malsukcesis. Kontrolu la kuketan formaton kaj servilan protokolon.",
+      "environmentHint": ".env-kuketo estas aktiva. Redaktu .env en la Pi kaj rekreu la retan ujon por forigi ĝin.",
+      "securityNote": "Kuketo estas ensaluta informo. Ne publike elmetu ĉi tiun servilon. La konservita valoro neniam estas resendata al la paĝo aŭ API.",
+      "memberIdPlaceholder": "Valoro de membro-ID",
+      "passHashPlaceholder": "Valoro de pasvorta haketo",
+      "igneousPlaceholder": "Valoro de Igneous"
+    },
     "sync": {
       "heading": "Datumbaza sinkronigo",
       "database": "Datumbazo:",
       "ready": "Preta",
       "notFound": "Ne trovita",
       "lastSync": "Lasta sinkronigo:",
-      "lastSyncDb": "Lasta sinkronigo (DB):",
+      "lastSyncDb": "DB-versio:",
       "never": "Neniam",
       "status": "Stato:",
       "idle": "Atendanta",
@@ -189,14 +190,6 @@
       "clear": "Forigi serĉhistorion",
       "empty": "Neniuj lastaj serĉoj"
     },
-    "developer": {
-      "heading": "Developer",
-      "enable": "Developer Mode",
-      "enableDesc": "Show developer settings for Hot tab",
-      "serverHost": "Server Host URL",
-      "hmacSalt": "HMAC Salt",
-      "hmacSaltPlaceholder": "Enter HMAC salt..."
-    },
     "suggestions": {
       "heading": "Etikeda kaŝmemoro",
       "build": "Konstrui kaŝmemoron",
@@ -206,44 +199,13 @@
       "built": "Konstruita",
       "building": "Konstruante...",
       "totalTags": "Totalaj etikedoj"
-    },
-    "messageSearch": {
-      "heading": "Mesaĝa Serĉo",
-      "enable": "Ŝalti mesaĝan serĉon",
-      "enableDesc": "Montri mesaĝan serĉon en navigado",
-      "serverUrl": "fscm-servila URL",
-      "serverUrlPlaceholder": "http://127.0.0.1:12332",
-      "resultLimit": "Rezulta limo",
-      "testConnection": "Testi konekton",
-      "testing": "Testante...",
-      "connectionOk": "Konektita",
-      "connectionFailed": "Konekto malsukcesis",
-      "sampleCount": "{{count}} specimenaj rezultoj"
-    },
-    "llmSearch": {
-      "heading": "LLM Search",
-      "enable": "Enable LLM Search",
-      "enableDesc": "Show LLM Search tab in navigation",
-      "serverUrl": "LLM search server URL",
-      "serverUrlPlaceholder": "http://127.0.0.1:8788",
-      "serverUrlDesc": "Used by the LLM Search tab.",
-      "testConnection": "Test Connection",
-      "testing": "Testing...",
-      "connectionOk": "Connected",
-      "connectionFailed": "Connection failed",
-      "workCount": "{{count}} indexed works"
-    },
-    "keywordGraph": {
-      "heading": "Keyword Graph",
-      "serverUrl": "work-keywords-go server URL",
-      "serverUrlPlaceholder": "http://127.0.0.1:8787",
-      "serverUrlDesc": "Keyword Graph tab server URL."
     }
   },
   "viewer": {
     "noImages": "Neniuj bildoj trovitaj por ĉi tiu galerio.",
     "back": "Reen",
     "settings": "Agordoj",
+    "openInApp": "Malfermi en aplikaĵo",
     "pageInfo": "{{current}} / {{total}}",
     "loading": "Ŝargante...",
     "retrying": "Reprovas... ({{current}}/{{max}})",
@@ -279,35 +241,5 @@
         "title": "Interspacado"
       }
     }
-  },
-  "activity": { "eyebrow": "Your library", "heading": "User activity", "subtitle": "A clear view of how you use Violet.", "reads": "Reads", "read": "Read", "bookmarks": "Bookmarks", "bookmark": "Bookmarked", "crops": "Crops", "crop": "Cropped", "downloads": "Downloads", "download": "Downloaded", "uniqueWorks": "Unique works", "trend": "Activity trend", "periodSummary": "{{total}} actions · {{days}} active days · {{average}} per active day", "days": "{{count}}d", "all": "All", "mix": "Activity mix", "mixSubtitle": "Share of all recorded actions", "recent": "Recent activity", "recentSubtitle": "Latest changes saved in user.db", "empty": "No activity yet", "error": "Failed to load user activity." },
-  "llmSearch": {
-    "heading": "LLM Search", "placeholder": "Describe a scene to search...", "search": "Search", "topK": "Top K", "candidateK": "Candidate K", "resultSummary": "{{count}} results in {{seconds}}s", "empty": "No LLM search results", "error": "Failed to search with LLM", "retry": "Retry", "disabled": "LLM search is disabled in Settings.", "rerankScore": "Rerank", "embedScore": "Embed", "imageError": "Failed to load image", "invalidPage": "Invalid page", "resultImageAlt": "Gallery {{id}} page {{page}}", "columnWidth": "Column width", "searchHistory": "LLM search history", "historyCount": "{{count}}x"
-  },
-  "messageSearch": {
-    "heading": "Mesaĝa Serĉo",
-    "placeholder": "Serĉi mesaĝan tekston...",
-    "mode": {
-      "contains": "Enhavas",
-      "similar": "Simila",
-      "lcs": "LCS"
-    },
-    "search": "Serĉi",
-    "resultCount": "{{count}} rezultoj",
-    "empty": "Neniuj mesaĝaj rezultoj",
-    "loading": "Serĉante...",
-    "error": "Mesaĝa serĉo malsukcesis",
-    "retry": "Reprovi",
-    "score": "Poentaro",
-    "correctness": "Precizeco",
-    "page": "p{{page}}",
-    "disabled": "Mesaĝa serĉo estas malŝaltita en Agordoj.",
-    "imageError": "Bildo ne ŝargiĝis",
-    "invalidPage": "Nevalida paĝo",
-    "resultImageAlt": "Galerio {{id}} paĝo {{page}}",
-    "columnWidth": "Kolumna larĝo",
-    "searchHistory": "Serĉa historio",
-    "historyCount": "{{count}}x",
-    "scrollToTop": "Rulumi supren"
   }
 }

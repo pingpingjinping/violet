@@ -1,6 +1,7 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { getDownloads, createDownload, retryDownload, deleteDownload, checkDownloaded } from '../api/downloads';
+import { getSharedActivity } from '../services/activity-sync';
 import { useToastStore } from '../stores/toast-store';
 
 export function useDownloadHistory(page = 0, pageSize = 30, enabled = true) {
@@ -57,9 +58,12 @@ export function useStartDownload() {
       if (already) {
         throw new Error('already_downloaded');
       }
+      const origins = [...new Set((await getSharedActivity()).filter(r => r.kind === 'download' && r.article === articleId).map(r => t(`activity.${r.origin}`)))];
+      if (origins.length && !window.confirm(t('activity.downloadConfirm', { sources: origins.join(', ') }))) return null;
       return createDownload(articleId);
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (!data) return;
       addToast(t('downloads.startToast'), 'info');
       qc.invalidateQueries({ queryKey: ['downloads'] });
       qc.invalidateQueries({ queryKey: ['downloads-infinite'] });
@@ -97,3 +101,4 @@ export function useDeleteDownload() {
     },
   });
 }
+

@@ -36,11 +36,14 @@ export function ViewerPage() {
   const insertLog = useInsertReadLog();
   const updateLog = useUpdateReadLog();
   const logIdRef = useRef<number | null>(null);
+  const latestPageRef = useRef(currentPage);
+  latestPageRef.current = currentPage;
   const { imageCacheEnabled, imageCacheExpireDays } = useAppStore();
   const resumePromptEnabled = useViewerStore((s) => s.resumePromptEnabled);
   const setDetectedProfile = useViewerStore((s) => s.setDetectedProfile);
   const usesTouchProfile = useMediaQuery('(hover: none) and (pointer: coarse)');
 
+  const [resumeCheckedFor, setResumeCheckedFor] = useState<number | null>(null);
   const [resumePage, setResumePage] = useState<number | null>(null);
   const [showResumeDialog, setShowResumeDialog] = useState(false);
 
@@ -75,29 +78,37 @@ export function ViewerPage() {
 
   // Check for resume position on mount
   useEffect(() => {
-    if (!galleryId || hasExplicitPage || !resumePromptEnabled) return;
+    if (!galleryId) return;
+    if (hasExplicitPage || !resumePromptEnabled) {
+      setResumeCheckedFor(galleryId);
+      return;
+    }
+    let cancelled = false;
     getLastPage(String(galleryId)).then((page) => {
-      if (page != null && page > 0) {
+      if (!cancelled && page != null && page > 0) {
         setResumePage(page);
         setShowResumeDialog(true);
       }
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => { if (!cancelled) setResumeCheckedFor(galleryId); });
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [galleryId, resumePromptEnabled]);
 
   // Insert read log on mount
   useEffect(() => {
-    if (!galleryId) return;
+    if (!galleryId || resumeCheckedFor !== galleryId) return;
+    logIdRef.current = null;
     insertLog.mutate(
       { Article: String(galleryId), Type: 0 },
       {
         onSuccess: (data) => {
           logIdRef.current = Number(data.Id);
+          updateLog.mutate({ id: Number(data.Id), LastPage: latestPageRef.current });
         },
       },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [galleryId]);
+  }, [galleryId, resumeCheckedFor]);
 
   // Update read log on page change
   useEffect(() => {

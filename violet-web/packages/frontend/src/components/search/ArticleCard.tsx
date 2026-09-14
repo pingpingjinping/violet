@@ -1,3 +1,4 @@
+import { useArticleActivity } from '../../hooks/useSharedActivity';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
@@ -39,7 +40,9 @@ function getTagOrder(ns: string): number {
 export const ArticleCard = memo(function ArticleCard({ article, viewMode = 'grid', aiScore, aiDescription, rank, viewCount, keyboardSelected = false }: ArticleCardProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { src: thumbnailSrc, onLoadSuccess: onThumbnailLoad } = useCachedThumbnail(article.Id);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const { src: thumbnailSrc, onLoadSuccess: onThumbnailLoad } = useCachedThumbnail(article.Id, cardRef);
+  const { downloads: sharedDownloads, read: sharedRead } = useArticleActivity(String(article.Id));
   const startDownload = useStartDownload();
   const retryDownload = useRetryDownload();
   const deleteDownload = useDeleteDownload();
@@ -53,7 +56,6 @@ export const ArticleCard = memo(function ArticleCard({ article, viewMode = 'grid
   const [showInfoDialog, setShowInfoDialog] = useState(false);
   const [showPageThumbnails, setShowPageThumbnails] = useState(false);
   const { data: imageList } = useImageList(showPageThumbnails ? article.Id : 0);
-  const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (keyboardSelected) {
@@ -141,7 +143,7 @@ export const ArticleCard = memo(function ArticleCard({ article, viewMode = 'grid
           ) : (
             <div className={styles.noImage}>{t('article.noImage')}</div>
           )}
-          {isDownloadsPage ? (
+          {isDownloadsPage && downloadRecord ? (
             <button
               className={`${styles.downloadBtn} ${styles.deleteBtn}`}
               onClick={handleDeleteDownload}
@@ -216,6 +218,12 @@ export const ArticleCard = memo(function ArticleCard({ article, viewMode = 'grid
         </div>
         <div className={styles.info}>
           <div className={styles.title}>{article.Title}</div>
+          {(sharedDownloads.length > 0 || sharedRead) && (
+            <div className={styles.meta}>
+              {[...new Set(sharedDownloads.map(r => r.origin))].map(origin => t('activity.downloaded', { source: t(`activity.${origin}`) })).join(' / ')}
+              {sharedRead && ` · ${t('activity.read', { page: sharedRead.page + 1 })}`}
+            </div>
+          )}
           <div className={styles.meta}>
             <span
               className={`${styles.articleId} ${styles.clickable}`}

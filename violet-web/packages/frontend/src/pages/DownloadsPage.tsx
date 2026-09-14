@@ -158,6 +158,7 @@ export function DownloadsPage() {
 
   return (
     <div className={styles.page}>
+      <p style={{ color: 'var(--color-text-secondary)' }}>{t('activity.recordOnly')}</p>
       <LocalSearchSection
         basePath="/downloads"
         searchBarRef={searchBarRef}

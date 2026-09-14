@@ -6,6 +6,8 @@ export interface SyncProgress {
   lastSyncDb: string | null;
   dbExists: boolean;
   error: string | null;
+  databaseVersion: string | null;
+  hostManaged: boolean;
   progress?: {
     current: number;
     total: number;

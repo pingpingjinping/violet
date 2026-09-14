@@ -3,15 +3,19 @@ import { useTranslation } from 'react-i18next';
 import { HelpCircle } from 'lucide-react';
 
 import { useAppStore } from '../stores/app-store';
-import { useViewerStore } from '../stores/viewer-store';
 import { useSyncStatus, useTriggerSync, useTriggerFullSync } from '../hooks/useSync';
 import { useSuggestionCacheStatus, useRebuildSuggestionCache } from '../hooks/useSuggestionCache';
-import { useMessageSearchStatus } from '../hooks/useMessageSearchStatus';
-import { useLlmSearchStatus } from '../hooks/useLlmSearchStatus';
 import { useSuggestions } from '../hooks/useSuggestions';
 import { useTagTranslation } from '../hooks/useTagTranslation';
 import { getCacheStats, clearAllCache } from '../services/image-cache';
+import {
+  getExhentaiCookieStatus,
+  removeExhentaiCookie,
+  saveExhentaiCookie,
+  type ExhentaiCookieStatus,
+} from '../api/exhentai-cookie';
 import styles from './SettingsPage.module.css';
+import { BookmarkSyncSettings } from '../components/settings/BookmarkSyncSettings';
 
 const themeColors = [
   'purple', 'amber', 'black', 'blue', 'blueGrey', 'brown',
@@ -22,8 +26,7 @@ const themeColors = [
 
 export function SettingsPage() {
   const { t } = useTranslation();
-  const { contentLanguage, uiLanguage, themeColor, scrollMode, tagClickAction, tagTranslation, aiSearchEnabled, messageSearchEnabled, messageSearchServerUrl, messageSearchResultLimit, llmSearchEnabled, llmSearchServerUrl, keywordGraphServerUrl, excludedTags, imageCacheEnabled, imageCacheMaxSizeMB, imageCacheExpireDays, contextualSuggestionCounts, developerMode, hmacSalt, serverHost, setContentLanguage, setUILanguage, setThemeColor, setScrollMode, setTagClickAction, setTagTranslation, setAiSearchEnabled, setMessageSearchEnabled, setMessageSearchServerUrl, setMessageSearchResultLimit, setLlmSearchEnabled, setLlmSearchServerUrl, setKeywordGraphServerUrl, addExcludedTag, removeExcludedTag, setImageCacheEnabled, setImageCacheMaxSizeMB, setImageCacheExpireDays, setContextualSuggestionCounts, setDeveloperMode, setHmacSalt, setServerHost } = useAppStore();
-  const { resumePromptEnabled, setResumePromptEnabled } = useViewerStore();
+  const { contentLanguage, uiLanguage, themeColor, scrollMode, tagTranslation, aiSearchEnabled, excludedTags, imageCacheEnabled, imageCacheMaxSizeMB, imageCacheExpireDays, setContentLanguage, setUILanguage, setThemeColor, setScrollMode, setTagTranslation, setAiSearchEnabled, addExcludedTag, removeExcludedTag, setImageCacheEnabled, setImageCacheMaxSizeMB, setImageCacheExpireDays } = useAppStore();
   const [showAiSearchHelp, setShowAiSearchHelp] = useState(false);
   const [showImageCacheHelp, setShowImageCacheHelp] = useState(false);
   const helpRef = useRef<HTMLDivElement>(null);
@@ -34,15 +37,66 @@ export function SettingsPage() {
   const [showFullSyncConfirm, setShowFullSyncConfirm] = useState(false);
   const { data: cacheStatus } = useSuggestionCacheStatus();
   const rebuildCache = useRebuildSuggestionCache();
-  const messageSearchStatus = useMessageSearchStatus();
-  const llmSearchStatus = useLlmSearchStatus();
 
   const [cacheStats, setCacheStats] = useState<{ totalSizeBytes: number; itemCount: number }>({ totalSizeBytes: 0, itemCount: 0 });
   const [isClearing, setIsClearing] = useState(false);
+  const [exhentaiMemberId, setExhentaiMemberId] = useState('');
+  const [exhentaiPassHash, setExhentaiPassHash] = useState('');
+  const [exhentaiIgneous, setExhentaiIgneous] = useState('');
+  const [exhentaiCookieStatus, setExhentaiCookieStatus] = useState<ExhentaiCookieStatus>({
+    configured: false,
+    source: null,
+  });
+  const [exhentaiCookieBusy, setExhentaiCookieBusy] = useState(false);
+  const [exhentaiCookieMessage, setExhentaiCookieMessage] = useState<
+    'saved' | 'removed' | 'error' | null
+  >(null);
 
   useEffect(() => {
     getCacheStats().then(setCacheStats);
+    getExhentaiCookieStatus()
+      .then(setExhentaiCookieStatus)
+      .catch(() => setExhentaiCookieMessage('error'));
   }, []);
+
+  const handleSaveExhentaiCookie = async () => {
+    setExhentaiCookieBusy(true);
+    setExhentaiCookieMessage(null);
+    try {
+      const cookie = [
+        `ipb_member_id=${exhentaiMemberId.trim()}`,
+        `ipb_pass_hash=${exhentaiPassHash.trim()}`,
+        `igneous=${exhentaiIgneous.trim()}`,
+      ].join('; ');
+      const status = await saveExhentaiCookie(cookie);
+      setExhentaiCookieStatus(status);
+      setExhentaiMemberId('');
+      setExhentaiPassHash('');
+      setExhentaiIgneous('');
+      setExhentaiCookieMessage('saved');
+    } catch {
+      setExhentaiCookieMessage('error');
+    } finally {
+      setExhentaiCookieBusy(false);
+    }
+  };
+
+  const handleRemoveExhentaiCookie = async () => {
+    setExhentaiCookieBusy(true);
+    setExhentaiCookieMessage(null);
+    try {
+      const status = await removeExhentaiCookie();
+      setExhentaiCookieStatus(status);
+      setExhentaiMemberId('');
+      setExhentaiPassHash('');
+      setExhentaiIgneous('');
+      setExhentaiCookieMessage('removed');
+    } catch {
+      setExhentaiCookieMessage('error');
+    } finally {
+      setExhentaiCookieBusy(false);
+    }
+  };
 
   const handleClearCache = async () => {
     setIsClearing(true);
@@ -83,7 +137,14 @@ export function SettingsPage() {
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return t('settings.sync.never');
-    return new Date(dateStr).toLocaleString();
+    return new Intl.DateTimeFormat(undefined, {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }).format(new Date(dateStr));
   };
 
   const getStatusText = () => {
@@ -107,14 +168,6 @@ export function SettingsPage() {
   };
 
   const isSyncing = syncStatus?.status !== 'idle' && syncStatus?.status !== 'error';
-
-  const handleMessageSearchStatus = () => {
-    messageSearchStatus.mutate(messageSearchServerUrl);
-  };
-
-  const handleLlmSearchStatus = () => {
-    llmSearchStatus.mutate(llmSearchServerUrl);
-  };
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -198,6 +251,7 @@ export function SettingsPage() {
   return (
     <div className={styles.page}>
       <h2 className={styles.heading}>{t('settings.heading')}</h2>
+      <BookmarkSyncSettings />
 
       <div className={styles.section}>
         <h3 className={styles.subheading}>{t('settings.language.heading')}</h3>
@@ -270,37 +324,6 @@ export function SettingsPage() {
           </select>
         </div>
 
-        <div className={styles.settingGroup}>
-          <label className={styles.settingLabel}>{t('settings.display.tagClickAction')}</label>
-          <select
-            className={styles.select}
-            value={tagClickAction}
-            onChange={(e) => setTagClickAction(e.target.value as any)}
-          >
-            <option value="search">{t('settings.display.tagClickSearch')}</option>
-            <option value="dialog">{t('settings.display.tagClickDialog')}</option>
-          </select>
-        </div>
-
-      </div>
-
-      <div className={styles.section}>
-        <h3 className={styles.subheading}>{t('settings.viewer.heading')}</h3>
-
-        <div className={styles.toggleRow}>
-          <div className={styles.toggleInfo}>
-            <span className={styles.toggleLabel}>{t('settings.viewer.resumePrompt')}</span>
-            <span className={styles.toggleDesc}>{t('settings.viewer.resumePromptDesc')}</span>
-          </div>
-          <label className={styles.toggle}>
-            <input
-              type="checkbox"
-              checked={resumePromptEnabled}
-              onChange={(e) => setResumePromptEnabled(e.target.checked)}
-            />
-            <span className={styles.toggleTrack} />
-          </label>
-        </div>
       </div>
 
       <div className={styles.section}>
@@ -435,161 +458,6 @@ export function SettingsPage() {
       </div>
 
       <div className={styles.section}>
-        <h3 className={styles.subheading}>{t('settings.messageSearch.heading')}</h3>
-
-        <div className={styles.toggleRow}>
-          <div className={styles.toggleInfo}>
-            <span className={styles.toggleLabel}>{t('settings.messageSearch.enable')}</span>
-            <span className={styles.toggleDesc}>{t('settings.messageSearch.enableDesc')}</span>
-          </div>
-          <label className={styles.toggle}>
-            <input
-              type="checkbox"
-              checked={messageSearchEnabled}
-              onChange={(e) => setMessageSearchEnabled(e.target.checked)}
-            />
-            <span className={styles.toggleTrack} />
-          </label>
-        </div>
-
-        <div className={styles.settingGroup}>
-          <label className={styles.settingLabel}>{t('settings.messageSearch.serverUrl')}</label>
-          <input
-            type="url"
-            className={styles.tagInput}
-            value={messageSearchServerUrl}
-            onChange={(e) => setMessageSearchServerUrl(e.target.value)}
-            placeholder={t('settings.messageSearch.serverUrlPlaceholder')}
-          />
-        </div>
-
-        <div className={styles.settingGroup}>
-          <label className={styles.settingLabel}>{t('settings.messageSearch.resultLimit')}</label>
-          <select
-            className={styles.select}
-            value={messageSearchResultLimit}
-            onChange={(e) => setMessageSearchResultLimit(Number(e.target.value))}
-          >
-            {[25, 50, 100, 200, 500].map((limit) => (
-              <option key={limit} value={limit}>{limit}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className={styles.syncButtons}>
-          <button
-            className={styles.syncBtn}
-            onClick={handleMessageSearchStatus}
-            disabled={messageSearchStatus.isPending}
-          >
-            {messageSearchStatus.isPending
-              ? t('settings.messageSearch.testing')
-              : t('settings.messageSearch.testConnection')}
-          </button>
-        </div>
-
-        {messageSearchStatus.isSuccess && (
-          <div className={styles.statusMessage}>
-            <span className={styles.statusOk}>
-              {t('settings.messageSearch.connectionOk')}
-            </span>
-            {typeof messageSearchStatus.data.sampleCount === 'number' && (
-              <span className={styles.statusDetail}>
-                {t('settings.messageSearch.sampleCount', {
-                  count: messageSearchStatus.data.sampleCount,
-                })}
-              </span>
-            )}
-          </div>
-        )}
-
-        {messageSearchStatus.isError && (
-          <div className={styles.statusMessage}>
-            <span className={styles.statusError}>
-              {t('settings.messageSearch.connectionFailed')}
-            </span>
-          </div>
-        )}
-      </div>
-
-      <div className={styles.section}>
-        <h3 className={styles.subheading}>{t('settings.llmSearch.heading')}</h3>
-
-        <div className={styles.toggleRow}>
-          <div className={styles.toggleInfo}>
-            <span className={styles.toggleLabel}>{t('settings.llmSearch.enable')}</span>
-            <span className={styles.toggleDesc}>{t('settings.llmSearch.enableDesc')}</span>
-          </div>
-          <label className={styles.toggle}>
-            <input
-              type="checkbox"
-              checked={llmSearchEnabled}
-              onChange={(e) => setLlmSearchEnabled(e.target.checked)}
-            />
-            <span className={styles.toggleTrack} />
-          </label>
-        </div>
-
-        <div className={styles.settingGroup}>
-          <label className={styles.settingLabel}>{t('settings.llmSearch.serverUrl')}</label>
-          <input
-            type="url"
-            className={styles.tagInput}
-            value={llmSearchServerUrl}
-            onChange={(e) => setLlmSearchServerUrl(e.target.value)}
-            placeholder={t('settings.llmSearch.serverUrlPlaceholder')}
-          />
-          <p className={styles.excludedTagsDesc}>{t('settings.llmSearch.serverUrlDesc')}</p>
-        </div>
-
-        <div className={styles.syncButtons}>
-          <button
-            className={styles.syncBtn}
-            onClick={handleLlmSearchStatus}
-            disabled={llmSearchStatus.isPending}
-          >
-            {llmSearchStatus.isPending
-              ? t('settings.llmSearch.testing')
-              : t('settings.llmSearch.testConnection')}
-          </button>
-        </div>
-
-        {llmSearchStatus.isSuccess && (
-          <div className={styles.statusMessage}>
-            <span className={styles.statusOk}>{t('settings.llmSearch.connectionOk')}</span>
-            {typeof llmSearchStatus.data.works === 'number' && (
-              <span className={styles.statusDetail}>
-                {t('settings.llmSearch.workCount', { count: llmSearchStatus.data.works })}
-              </span>
-            )}
-          </div>
-        )}
-        {llmSearchStatus.isError && (
-          <div className={styles.statusMessage}>
-            <span className={styles.statusError}>{t('settings.llmSearch.connectionFailed')}</span>
-          </div>
-        )}
-      </div>
-
-      <div className={styles.section}>
-        <h3 className={styles.subheading}>{t('settings.keywordGraph.heading')}</h3>
-
-        <div className={styles.settingGroup}>
-          <label className={styles.settingLabel}>{t('settings.keywordGraph.serverUrl')}</label>
-          <input
-            type="url"
-            className={styles.tagInput}
-            value={keywordGraphServerUrl}
-            onChange={(e) => setKeywordGraphServerUrl(e.target.value)}
-            placeholder={t('settings.keywordGraph.serverUrlPlaceholder')}
-          />
-          <p className={styles.excludedTagsDesc}>
-            {t('settings.keywordGraph.serverUrlDesc')}
-          </p>
-        </div>
-      </div>
-
-      <div className={styles.section}>
         <div className={styles.sectionHeader}>
           <h3 className={styles.subheading}>{t('settings.imageCache.heading')}</h3>
           <div className={styles.helpWrapper} ref={imageCacheHelpRef}>
@@ -637,8 +505,6 @@ export function SettingsPage() {
                 <option value={500}>500 MB</option>
                 <option value={1024}>1 GB</option>
                 <option value={2048}>2 GB</option>
-                <option value={5120}>5 GB</option>
-                <option value={10240}>10 GB</option>
               </select>
             </div>
 
@@ -654,9 +520,6 @@ export function SettingsPage() {
                 <option value={7}>{t('settings.imageCache.expireDaysDesc', { days: 7 })}</option>
                 <option value={14}>{t('settings.imageCache.expireDaysDesc', { days: 14 })}</option>
                 <option value={30}>{t('settings.imageCache.expireDaysDesc', { days: 30 })}</option>
-                <option value={60}>{t('settings.imageCache.expireDaysDesc', { days: 60 })}</option>
-                <option value={90}>{t('settings.imageCache.expireDaysDesc', { days: 90 })}</option>
-                <option value={180}>{t('settings.imageCache.expireDaysDesc', { days: 180 })}</option>
               </select>
             </div>
 
@@ -685,6 +548,108 @@ export function SettingsPage() {
       </div>
 
       <div className={styles.section}>
+        <h3 className={styles.subheading}>{t('settings.exhentaiCookie.heading')}</h3>
+        <p className={styles.themeDesc}>{t('settings.exhentaiCookie.description')}</p>
+
+        <div className={styles.syncInfo}>
+          <div className={styles.infoRow}>
+            <span className={styles.label}>{t('settings.exhentaiCookie.status')}</span>
+            <span className={exhentaiCookieStatus.configured ? styles.statusOk : styles.statusError}>
+              {exhentaiCookieStatus.configured
+                ? t('settings.exhentaiCookie.configured')
+                : t('settings.exhentaiCookie.notConfigured')}
+            </span>
+          </div>
+          {exhentaiCookieStatus.source && (
+            <div className={styles.infoRow}>
+              <span className={styles.label}>{t('settings.exhentaiCookie.source')}</span>
+              <span>{t(`settings.exhentaiCookie.${exhentaiCookieStatus.source}`)}</span>
+            </div>
+          )}
+        </div>
+
+        <div className={styles.settingGroup}>
+          <label className={styles.settingLabel}>ipb_member_id</label>
+          <input
+            type="text"
+            className={styles.tagInput}
+            value={exhentaiMemberId}
+            onChange={(event) => setExhentaiMemberId(event.target.value)}
+            placeholder={t('settings.exhentaiCookie.memberIdPlaceholder')}
+            autoComplete="off"
+            spellCheck={false}
+            disabled={exhentaiCookieBusy}
+          />
+        </div>
+
+        <div className={styles.settingGroup}>
+          <label className={styles.settingLabel}>ipb_pass_hash</label>
+          <input
+            type="password"
+            className={styles.tagInput}
+            value={exhentaiPassHash}
+            onChange={(event) => setExhentaiPassHash(event.target.value)}
+            placeholder={t('settings.exhentaiCookie.passHashPlaceholder')}
+            autoComplete="off"
+            spellCheck={false}
+            disabled={exhentaiCookieBusy}
+          />
+        </div>
+
+        <div className={styles.settingGroup}>
+          <label className={styles.settingLabel}>igneous</label>
+          <input
+            type="password"
+            className={styles.tagInput}
+            value={exhentaiIgneous}
+            onChange={(event) => setExhentaiIgneous(event.target.value)}
+            placeholder={t('settings.exhentaiCookie.igneousPlaceholder')}
+            autoComplete="off"
+            spellCheck={false}
+            disabled={exhentaiCookieBusy}
+          />
+          <p className={styles.themeDesc}>{t('settings.exhentaiCookie.requiredValues')}</p>
+        </div>
+
+        <div className={styles.syncButtons}>
+          <button
+            className={styles.syncBtn}
+            onClick={handleSaveExhentaiCookie}
+            disabled={
+              exhentaiCookieBusy
+              || !exhentaiMemberId.trim()
+              || !exhentaiPassHash.trim()
+              || !exhentaiIgneous.trim()
+            }
+          >
+            {exhentaiCookieBusy
+              ? t('settings.exhentaiCookie.working')
+              : t('settings.exhentaiCookie.save')}
+          </button>
+          <button
+            className={styles.fullSyncBtn}
+            onClick={handleRemoveExhentaiCookie}
+            disabled={exhentaiCookieBusy || exhentaiCookieStatus.source !== 'stored'}
+          >
+            {t('settings.exhentaiCookie.remove')}
+          </button>
+        </div>
+
+        {exhentaiCookieMessage && (
+          <div className={styles.statusMessage}>
+            <span className={exhentaiCookieMessage === 'error' ? styles.statusError : styles.statusOk}>
+              {t(`settings.exhentaiCookie.${exhentaiCookieMessage}`)}
+            </span>
+          </div>
+        )}
+
+        {exhentaiCookieStatus.source === 'environment' && (
+          <p className={styles.themeDesc}>{t('settings.exhentaiCookie.environmentHint')}</p>
+        )}
+        <p className={styles.themeDesc}>{t('settings.exhentaiCookie.securityNote')}</p>
+      </div>
+
+      <div className={styles.section}>
         <h3 className={styles.subheading}>{t('settings.sync.heading')}</h3>
 
         <div className={styles.syncInfo}>
@@ -702,7 +667,7 @@ export function SettingsPage() {
 
           <div className={styles.infoRow}>
             <span className={styles.label}>{t('settings.sync.lastSyncDb')}</span>
-            <span>{formatDate(syncStatus?.lastSyncDb || null)}</span>
+            <span>{formatDate(syncStatus?.databaseVersion || syncStatus?.lastSyncDb || null)}</span>
           </div>
 
           <div className={styles.infoRow}>
@@ -744,16 +709,18 @@ export function SettingsPage() {
             {triggerSync.isPending ? t('settings.sync.starting') : t('settings.sync.syncNow')}
           </button>
 
-          <button
-            className={styles.fullSyncBtn}
-            onClick={handleFullSync}
-            disabled={isSyncing || triggerFullSync.isPending}
-          >
-            {triggerFullSync.isPending ? t('settings.sync.starting') : t('settings.sync.redownloadDB')}
-          </button>
+          {!syncStatus?.hostManaged && (
+            <button
+              className={styles.fullSyncBtn}
+              onClick={handleFullSync}
+              disabled={isSyncing || triggerFullSync.isPending}
+            >
+              {triggerFullSync.isPending ? t('settings.sync.starting') : t('settings.sync.redownloadDB')}
+            </button>
+          )}
         </div>
 
-        {showFullSyncConfirm && (
+        {showFullSyncConfirm && !syncStatus?.hostManaged && (
           <div className={styles.confirmDialog}>
             <p>{t('settings.sync.confirmRedownload')}</p>
             <div className={styles.confirmButtons}>
@@ -787,21 +754,6 @@ export function SettingsPage() {
           )}
         </div>
 
-        <div className={styles.toggleRow}>
-          <div className={styles.toggleInfo}>
-            <span className={styles.toggleLabel}>{t('settings.suggestions.contextualCounts')}</span>
-            <span className={styles.toggleDesc}>{t('settings.suggestions.contextualCountsDesc')}</span>
-          </div>
-          <label className={styles.toggle}>
-            <input
-              type="checkbox"
-              checked={contextualSuggestionCounts}
-              onChange={(e) => setContextualSuggestionCounts(e.target.checked)}
-            />
-            <span className={styles.toggleTrack} />
-          </label>
-        </div>
-
         <div className={styles.syncButtons}>
           <button
             className={styles.syncBtn}
@@ -815,51 +767,6 @@ export function SettingsPage() {
               : t('settings.suggestions.build')}
           </button>
         </div>
-      </div>
-
-      <div className={styles.section}>
-        <h3 className={styles.subheading}>{t('settings.developer.heading')}</h3>
-
-        <div className={styles.toggleRow}>
-          <div className={styles.toggleInfo}>
-            <span className={styles.toggleLabel}>{t('settings.developer.enable')}</span>
-            <span className={styles.toggleDesc}>{t('settings.developer.enableDesc')}</span>
-          </div>
-          <label className={styles.toggle}>
-            <input
-              type="checkbox"
-              checked={developerMode}
-              onChange={(e) => setDeveloperMode(e.target.checked)}
-            />
-            <span className={styles.toggleTrack} />
-          </label>
-        </div>
-
-        {developerMode && (
-          <>
-            <div className={styles.settingGroup}>
-              <label className={styles.settingLabel}>{t('settings.developer.serverHost')}</label>
-              <input
-                type="text"
-                className={styles.tagInput}
-                value={serverHost}
-                onChange={(e) => setServerHost(e.target.value)}
-                placeholder="https://koromo.cc"
-              />
-            </div>
-
-            <div className={styles.settingGroup}>
-              <label className={styles.settingLabel}>{t('settings.developer.hmacSalt')}</label>
-              <input
-                type="password"
-                className={styles.tagInput}
-                value={hmacSalt}
-                onChange={(e) => setHmacSalt(e.target.value)}
-                placeholder={t('settings.developer.hmacSaltPlaceholder')}
-              />
-            </div>
-          </>
-        )}
       </div>
 
     </div>

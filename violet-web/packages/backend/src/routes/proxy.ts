@@ -7,6 +7,34 @@ export const proxyRouter = Router();
 // Cache thumbnails for 30 minutes
 const thumbnailCache = new Map<number, { url: string; timestamp: number }>();
 const THUMBNAIL_CACHE_TTL = 30 * 60 * 1000;
+const thumbnailPending = new Map<number, Promise<string | undefined>>();
+let thumbnailActive = 0;
+const thumbnailWaiters: Array<() => void> = [];
+
+async function resolveThumbnail(id: number): Promise<string | undefined> {
+  const existing = thumbnailPending.get(id);
+  if (existing) return existing;
+  const task = (async () => {
+    if (thumbnailActive >= 4) {
+      await new Promise<void>((resolve) => thumbnailWaiters.push(resolve));
+    } else {
+      thumbnailActive++;
+    }
+    try {
+      return (await resolveGallery(id)).bigThumbnails?.[0];
+    } finally {
+      const next = thumbnailWaiters.shift();
+      if (next) next();
+      else thumbnailActive--;
+    }
+  })();
+  thumbnailPending.set(id, task);
+  try {
+    return await task;
+  } finally {
+    thumbnailPending.delete(id);
+  }
+}
 
 proxyRouter.get('/image', async (req, res, next) => {
   try {
@@ -55,14 +83,13 @@ proxyRouter.get('/thumbnail/:id', async (req, res, next) => {
     }
 
     // Resolve gallery and extract first big thumbnail
-    const result = await resolveGallery(id);
+    const thumbnailUrl = await resolveThumbnail(id);
 
-    if (!result.bigThumbnails || result.bigThumbnails.length === 0) {
+    if (!thumbnailUrl) {
       res.status(404).json({ error: 'No thumbnail found' });
       return;
     }
 
-    const thumbnailUrl = result.bigThumbnails[0];
 
     // Cache the result
     thumbnailCache.set(id, { url: thumbnailUrl, timestamp: Date.now() });

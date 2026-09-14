@@ -6,6 +6,7 @@ ARG TARGETARCH
 WORKDIR /src
 
 COPY go.mod go.sum ./
+ENV GOPROXY=https://goproxy.io,direct
 RUN go mod download
 
 COPY . .

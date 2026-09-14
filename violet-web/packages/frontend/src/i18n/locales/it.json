@@ -9,15 +9,7 @@
     "history": "Cronologia",
     "downloads": "Download",
     "aiSearch": "Ricerca AI",
-    "settings": "Impostazioni",
-    "hot": "Hot",
-    "messageSearch": "Messaggi",
-    "llmSearch": "LLM Search",
-    "keywordGraph": "Keyword Graph",
-    "workExperiment": "Experiment",
-    "authorSimilarity": "Similar Authors",
-    "activity": "Activity",
-    "more": "Altro"
+    "settings": "Impostazioni"
   },
   "home": {
     "heading": "Sfoglia",
@@ -34,9 +26,7 @@
     "suggestions": "Suggerimenti",
     "recentSearches": "Ricerche recenti",
     "clearRecent": "Cancella",
-    "includeQuery": "Includi \"{{query}}\"",
-    "expandTags": "Mostra tutti i tag",
-    "collapseTags": "Mostra una riga"
+    "openInApp": "Apri nell'app"
   },
   "article": {
     "artist": "Artista",
@@ -56,17 +46,9 @@
     "addBookmark": "Aggiungi segnalibro",
     "add": "Aggiungi",
     "cancel": "Annulla",
-    "uncategorized": "Non categorizzato"
-  },
-  "hot": {
-    "heading": "Hot",
-    "daily": "Daily",
-    "weekly": "Weekly",
-    "monthly": "Monthly",
-    "alltime": "All Time",
-    "setupRequired": "Developer mode and HMAC salt required.",
-    "setupHint": "Enable Developer Mode in Settings and configure HMAC Salt.",
-    "error": "Failed to load. Check developer settings."
+    "uncategorized": "Non categorizzato",
+    "import": "Importa",
+    "export": "Esporta"
   },
   "history": {
     "heading": "Cronologia"
@@ -141,11 +123,6 @@
       "pagination": "Paginazione",
       "infinite": "Scorrimento infinito"
     },
-    "viewer": {
-      "heading": "Visualizzatore",
-      "resumePrompt": "Chiedi se riprendere",
-      "resumePromptDesc": "Mostra una richiesta per passare all'ultima pagina letta quando si apre un'opera"
-    },
     "tagTranslation": {
       "heading": "Traduzione tag",
       "korean": "Coreano",
@@ -163,13 +140,37 @@
       "enableDesc": "Mostra la scheda Ricerca AI nella navigazione",
       "helpText": "La ricerca AI richiede il server violet-search in esecuzione separatamente. È necessario configurare e avviare il servizio violet-search per utilizzare questa funzione."
     },
+    "exhentaiCookie": {
+      "heading": "Cookie ExHentai",
+      "description": "Usato per caricare le gallerie da ExHentai quando i metadati di Hitomi non sono disponibili. Le gallerie pubbliche di E-Hentai non richiedono cookie.",
+      "status": "Stato:",
+      "source": "Origine:",
+      "configured": "Configurato",
+      "notConfigured": "Non configurato",
+      "stored": "File delle impostazioni web",
+      "environment": "Variabile d'ambiente .env",
+      "cookieLabel": "Valore completo del cookie ExHentai",
+      "cookiePlaceholder": "ipb_member_id=...; ipb_pass_hash=...; igneous=...",
+      "requiredValues": "Sono necessari ipb_member_id, ipb_pass_hash e igneous.",
+      "save": "Salva cookie",
+      "remove": "Rimuovi cookie salvato",
+      "working": "Elaborazione...",
+      "saved": "Cookie salvato. Sarà usato dalla prossima richiesta.",
+      "removed": "Il cookie salvato nelle impostazioni web è stato rimosso.",
+      "error": "Impossibile completare la richiesta. Controlla il formato del cookie e il log del server.",
+      "environmentHint": "È attivo un cookie .env. Modifica .env sul Pi e ricrea il container web per rimuoverlo.",
+      "securityNote": "Il cookie contiene informazioni di accesso. Non esporre questo server a Internet. Il valore salvato non viene mai restituito alla pagina o all'API.",
+      "memberIdPlaceholder": "Valore ID membro",
+      "passHashPlaceholder": "Valore hash password",
+      "igneousPlaceholder": "Valore Igneous"
+    },
     "sync": {
       "heading": "Sincronizzazione database",
       "database": "Database:",
       "ready": "Pronto",
       "notFound": "Non trovato",
       "lastSync": "Ultima sincronizzazione:",
-      "lastSyncDb": "Ultima sincronizzazione (DB):",
+      "lastSyncDb": "Versione DB:",
       "never": "Mai",
       "status": "Stato:",
       "idle": "Inattivo",
@@ -189,14 +190,6 @@
       "clear": "Cancella cronologia ricerche",
       "empty": "Nessuna ricerca recente"
     },
-    "developer": {
-      "heading": "Developer",
-      "enable": "Developer Mode",
-      "enableDesc": "Show developer settings for Hot tab",
-      "serverHost": "Server Host URL",
-      "hmacSalt": "HMAC Salt",
-      "hmacSaltPlaceholder": "Enter HMAC salt..."
-    },
     "suggestions": {
       "heading": "Cache tag",
       "build": "Costruisci cache",
@@ -206,44 +199,13 @@
       "built": "Costruita",
       "building": "Costruzione...",
       "totalTags": "Tag totali"
-    },
-    "messageSearch": {
-      "heading": "Ricerca messaggi",
-      "enable": "Abilita ricerca messaggi",
-      "enableDesc": "Mostra la scheda ricerca messaggi nella navigazione",
-      "serverUrl": "URL server fscm",
-      "serverUrlPlaceholder": "http://127.0.0.1:12332",
-      "resultLimit": "Limite risultati",
-      "testConnection": "Test connessione",
-      "testing": "Test...",
-      "connectionOk": "Connesso",
-      "connectionFailed": "Connessione non riuscita",
-      "sampleCount": "{{count}} risultati campione"
-    },
-    "llmSearch": {
-      "heading": "LLM Search",
-      "enable": "Enable LLM Search",
-      "enableDesc": "Show LLM Search tab in navigation",
-      "serverUrl": "LLM search server URL",
-      "serverUrlPlaceholder": "http://127.0.0.1:8788",
-      "serverUrlDesc": "Used by the LLM Search tab.",
-      "testConnection": "Test Connection",
-      "testing": "Testing...",
-      "connectionOk": "Connected",
-      "connectionFailed": "Connection failed",
-      "workCount": "{{count}} indexed works"
-    },
-    "keywordGraph": {
-      "heading": "Keyword Graph",
-      "serverUrl": "work-keywords-go server URL",
-      "serverUrlPlaceholder": "http://127.0.0.1:8787",
-      "serverUrlDesc": "Keyword Graph tab server URL."
     }
   },
   "viewer": {
     "noImages": "Nessuna immagine trovata per questa galleria.",
     "back": "Indietro",
     "settings": "Impostazioni",
+    "openInApp": "Apri nell'app",
     "pageInfo": "{{current}} / {{total}}",
     "loading": "Caricamento...",
     "retrying": "Nuovo tentativo... ({{current}}/{{max}})",
@@ -279,35 +241,5 @@
         "title": "Spaziatura"
       }
     }
-  },
-  "activity": { "eyebrow": "Your library", "heading": "User activity", "subtitle": "A clear view of how you use Violet.", "reads": "Reads", "read": "Read", "bookmarks": "Bookmarks", "bookmark": "Bookmarked", "crops": "Crops", "crop": "Cropped", "downloads": "Downloads", "download": "Downloaded", "uniqueWorks": "Unique works", "trend": "Activity trend", "periodSummary": "{{total}} actions · {{days}} active days · {{average}} per active day", "days": "{{count}}d", "all": "All", "mix": "Activity mix", "mixSubtitle": "Share of all recorded actions", "recent": "Recent activity", "recentSubtitle": "Latest changes saved in user.db", "empty": "No activity yet", "error": "Failed to load user activity." },
-  "llmSearch": {
-    "heading": "LLM Search", "placeholder": "Describe a scene to search...", "search": "Search", "topK": "Top K", "candidateK": "Candidate K", "resultSummary": "{{count}} results in {{seconds}}s", "empty": "No LLM search results", "error": "Failed to search with LLM", "retry": "Retry", "disabled": "LLM search is disabled in Settings.", "rerankScore": "Rerank", "embedScore": "Embed", "imageError": "Failed to load image", "invalidPage": "Invalid page", "resultImageAlt": "Gallery {{id}} page {{page}}", "columnWidth": "Column width", "searchHistory": "LLM search history", "historyCount": "{{count}}x"
-  },
-  "messageSearch": {
-    "heading": "Ricerca messaggi",
-    "placeholder": "Cerca testo nei messaggi...",
-    "mode": {
-      "contains": "Contiene",
-      "similar": "Simile",
-      "lcs": "LCS"
-    },
-    "search": "Cerca",
-    "resultCount": "{{count}} risultati",
-    "empty": "Nessun messaggio trovato",
-    "loading": "Ricerca...",
-    "error": "Ricerca messaggi non riuscita",
-    "retry": "Riprova",
-    "score": "Punteggio",
-    "correctness": "Accuratezza",
-    "page": "p{{page}}",
-    "disabled": "La ricerca messaggi è disattivata nelle impostazioni.",
-    "imageError": "Caricamento immagine non riuscito",
-    "invalidPage": "Pagina non valida",
-    "resultImageAlt": "Galleria {{id}} pagina {{page}}",
-    "columnWidth": "Larghezza colonna",
-    "searchHistory": "Cronologia ricerche",
-    "historyCount": "{{count}}x",
-    "scrollToTop": "Torna in cima"
   }
 }

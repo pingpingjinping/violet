@@ -1,3 +1,4 @@
+import { getSharedActivity } from '../services/activity-sync';
 import { createStatusBatcher } from './batch-status';
 import type { DownloadRecord } from '@violet-web/shared';
 import { api } from './client';
@@ -28,7 +29,14 @@ export interface DownloadDateEntry {
 
 export async function getDownloadEntries(): Promise<DownloadDateEntry[]> {
   const { data } = await api.get<{ entries: DownloadDateEntry[] }>('/downloads/ids');
-  return data.entries;
+  const latest = new Map(data.entries.map(e => [e.articleId, e.date]));
+  for (const row of await getSharedActivity()) {
+    if (row.kind !== 'download') continue;
+    if (!latest.has(row.article) || Date.parse(latest.get(row.article)!) < row.timestamp) {
+      latest.set(row.article, new Date(row.timestamp).toISOString());
+    }
+  }
+  return [...latest].map(([articleId, date]) => ({ articleId, date })).sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
 }
 
 export async function getDownload(id: number): Promise<DownloadRecord> {

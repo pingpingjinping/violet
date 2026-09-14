@@ -9,15 +9,7 @@
     "history": "履歴",
     "downloads": "ダウンロード",
     "aiSearch": "AI検索",
-    "settings": "設定",
-    "hot": "Hot",
-    "messageSearch": "メッセージ",
-    "llmSearch": "LLM検索",
-    "keywordGraph": "Keyword Graph",
-    "workExperiment": "Experiment",
-    "authorSimilarity": "Similar Authors",
-    "activity": "Activity",
-    "more": "その他"
+    "settings": "設定"
   },
   "home": {
     "heading": "閲覧",
@@ -34,9 +26,7 @@
     "suggestions": "候補",
     "recentSearches": "最近の検索",
     "clearRecent": "クリア",
-    "includeQuery": "\"{{query}}\" を含む",
-    "expandTags": "すべてのタグを表示",
-    "collapseTags": "1行だけ表示"
+    "openInApp": "アプリで開く"
   },
   "article": {
     "artist": "作家",
@@ -56,17 +46,9 @@
     "addBookmark": "ブックマーク追加",
     "add": "追加",
     "cancel": "キャンセル",
-    "uncategorized": "未分類"
-  },
-  "hot": {
-    "heading": "Hot",
-    "daily": "Daily",
-    "weekly": "Weekly",
-    "monthly": "Monthly",
-    "alltime": "All Time",
-    "setupRequired": "Developer mode and HMAC salt required.",
-    "setupHint": "Enable Developer Mode in Settings and configure HMAC Salt.",
-    "error": "Failed to load. Check developer settings."
+    "uncategorized": "未分類",
+    "import": "読み込み",
+    "export": "書き出し"
   },
   "history": {
     "heading": "履歴"
@@ -141,11 +123,6 @@
       "pagination": "ページネーション",
       "infinite": "無限スクロール"
     },
-    "viewer": {
-      "heading": "ビューア",
-      "resumePrompt": "続きから読むか確認",
-      "resumePromptDesc": "作品を開いたとき、最後に読んだページへ移動するか確認します"
-    },
     "tagTranslation": {
       "heading": "タグ翻訳",
       "korean": "韓国語",
@@ -163,13 +140,37 @@
       "enableDesc": "ナビゲーションにAI検索タブを表示します",
       "helpText": "AI検索を使用するには、violet-searchサーバーを別途起動する必要があります。この機能を使用するには、violet-searchサービスをセットアップして実行してください。"
     },
+    "exhentaiCookie": {
+      "heading": "ExHentai Cookie",
+      "description": "Hitomiのメタデータが見つからない作品をExHentaiから読み込むために使用します。公開E-Hentai作品にはCookieは不要です。",
+      "status": "状態:",
+      "source": "保存元:",
+      "configured": "設定済み",
+      "notConfigured": "未設定",
+      "stored": "Web設定ファイル",
+      "environment": ".env環境変数",
+      "cookieLabel": "ExHentai Cookieの全体値",
+      "cookiePlaceholder": "ipb_member_id=...; ipb_pass_hash=...; igneous=...",
+      "requiredValues": "ipb_member_id、ipb_pass_hash、igneousがすべて必要です。",
+      "save": "Cookieを保存",
+      "remove": "保存したCookieを削除",
+      "working": "処理中...",
+      "saved": "Cookieを保存しました。次のリクエストから適用されます。",
+      "removed": "Web設定に保存されたCookieを削除しました。",
+      "error": "処理できませんでした。Cookieの形式とサーバーログを確認してください。",
+      "environmentHint": ".envのCookieが使用中です。削除するにはPiの.envを編集し、Webコンテナを再作成してください。",
+      "securityNote": "Cookieはログイン情報です。このサーバーを外部インターネットに公開しないでください。保存値は画面やAPIに返されません。",
+      "memberIdPlaceholder": "メンバーIDの値",
+      "passHashPlaceholder": "パスハッシュの値",
+      "igneousPlaceholder": "Igneousの値"
+    },
     "sync": {
       "heading": "データベース同期",
       "database": "データベース:",
       "ready": "準備完了",
       "notFound": "見つかりません",
       "lastSync": "最終同期:",
-      "lastSyncDb": "最終同期(DB):",
+      "lastSyncDb": "DBバージョン:",
       "never": "なし",
       "status": "ステータス:",
       "idle": "待機中",
@@ -189,14 +190,6 @@
       "clear": "検索履歴をクリア",
       "empty": "最近の検索はありません"
     },
-    "developer": {
-      "heading": "Developer",
-      "enable": "Developer Mode",
-      "enableDesc": "Show developer settings for Hot tab",
-      "serverHost": "Server Host URL",
-      "hmacSalt": "HMAC Salt",
-      "hmacSaltPlaceholder": "Enter HMAC salt..."
-    },
     "suggestions": {
       "heading": "タグキャッシュ",
       "build": "キャッシュ構築",
@@ -206,64 +199,19 @@
       "built": "構築済み",
       "building": "構築中...",
       "totalTags": "総タグ数"
-    },
-    "messageSearch": {
-      "heading": "メッセージ検索",
-      "enable": "メッセージ検索を有効化",
-      "enableDesc": "ナビゲーションにメッセージ検索タブを表示します",
-      "serverUrl": "fscmサーバーURL",
-      "serverUrlPlaceholder": "http://127.0.0.1:12332",
-      "resultLimit": "結果数上限",
-      "testConnection": "接続テスト",
-      "testing": "テスト中...",
-      "connectionOk": "接続済み",
-      "connectionFailed": "接続失敗",
-      "sampleCount": "サンプル{{count}}件"
-    },
-    "llmSearch": {
-      "heading": "LLM検索",
-      "enable": "LLM検索を有効化",
-      "enableDesc": "ナビゲーションにLLM検索タブを表示します",
-      "serverUrl": "LLM検索サーバーURL",
-      "serverUrlPlaceholder": "http://127.0.0.1:8788",
-      "serverUrlDesc": "LLM検索タブで使用するサーバーです。",
-      "testConnection": "接続テスト",
-      "testing": "テスト中...",
-      "connectionOk": "接続済み",
-      "connectionFailed": "接続失敗",
-      "workCount": "{{count}}作品を索引化"
-    },
-    "keywordGraph": {
-      "heading": "Keyword Graph",
-      "serverUrl": "work-keywords-go server URL",
-      "serverUrlPlaceholder": "http://127.0.0.1:8787",
-      "serverUrlDesc": "Keyword Graph tab server URL."
     }
   },
   "viewer": {
-    "mobileFullscreen": "モバイルで全画面表示",
-    "mobileFullscreenHint": "ビューアを開くと全画面に切り替えます。自動で切り替わらない場合は画面を一度タップしてください。",
     "noImages": "このギャラリーの画像が見つかりませんでした。",
     "back": "戻る",
     "settings": "設定",
-    "more": "\u305D\u306E\u4ED6",
+    "openInApp": "アプリで開く",
     "pageInfo": "{{current}} / {{total}}",
-    "intensity": {
-      "label": "セリフの高まり",
-      "ariaLabel": "{{page}}ページ、セリフの高まりは100点中{{score}}点"
-    },
     "loading": "読み込み中...",
     "retrying": "再試行中... ({{current}}/{{max}})",
     "loadError": "{{max}}回の試行後、画像の読み込みに失敗しました。クリックして再試行。",
     "settingsPanel": {
       "title": "ビューア設定",
-      "profile": {
-        "title": "設定プロファイル",
-        "auto": "自動",
-        "mobile": "モバイル",
-        "desktop": "デスクトップ",
-        "active": "{{profile}}設定を使用中"
-      },
       "pageMode": {
         "title": "ページモード",
         "scroll": "スクロール",
@@ -292,78 +240,36 @@
       "padding": {
         "title": "余白"
       }
+    },
+    "resume": {
+      "title": "続きを読む",
+      "message": "{{page}} / {{total}}ページまで読みました。続きから読みますか？",
+      "resume": "続きから",
+      "startOver": "最初から"
     }
   },
-  "activity": { "eyebrow": "Your library", "heading": "User activity", "subtitle": "A clear view of how you use Violet.", "reads": "Reads", "read": "Read", "bookmarks": "Bookmarks", "bookmark": "Bookmarked", "crops": "Crops", "crop": "Cropped", "downloads": "Downloads", "download": "Downloaded", "uniqueWorks": "Unique works", "trend": "Activity trend", "periodSummary": "{{total}} actions · {{days}} active days · {{average}} per active day", "days": "{{count}}d", "all": "All", "mix": "Activity mix", "mixSubtitle": "Share of all recorded actions", "recent": "Recent activity", "recentSubtitle": "Latest changes saved in user.db", "empty": "No activity yet", "error": "Failed to load user activity." },
-  "llmSearch": {
-    "heading": "LLM検索",
-    "placeholder": "検索したいシーンを説明...",
-    "search": "検索",
-    "topK": "Top K",
-    "candidateK": "Candidate K",
-    "resultSummary": "{{seconds}}秒で{{count}}件",
-    "empty": "検索結果がありません",
-    "error": "LLM検索に失敗しました",
-    "retry": "再試行",
-    "disabled": "設定でLLM検索が無効です。",
-    "rerankScore": "リランク",
-    "embedScore": "埋め込み",
-    "imageError": "画像の読み込みに失敗",
-    "invalidPage": "無効なページ",
-    "resultImageAlt": "ギャラリー{{id}} {{page}}ページ",
-    "columnWidth": "列幅",
-    "searchHistory": "LLM検索履歴",
-    "historyCount": "{{count}}回"
+  "bookmarkSync": {
+    "heading": "アプリ・ウェブの記録同期",
+    "description": "作品のブックマーク、読書状況、完了したダウンロードの記録を共有します。フォルダー、作家のブックマーク、ファイルは各端末に残り、新しいブックマークは既定のフォルダーに入ります。",
+    "token": "同期トークン",
+    "interval": "自動同期の間隔",
+    "daily": "1日1回",
+    "weekly": "週1回",
+    "save": "保存",
+    "now": "今すぐ同期",
+    "busy": "同期中…",
+    "saved": "設定を保存しました。トークンを空にすると同期は無効になります。",
+    "notReady": "同期が無効、または別の同期が実行中です。",
+    "success": "同期完了：重複を除く作品{{count}}件。",
+    "error": "同期に失敗しました。トークンとWalnutPiへの接続を確認してください。端末のブックマークは保持されます。"
   },
-  "messageSearch": {
-    "idMin": "開始番号",
-    "idMax": "終了番号",
-    "noBound": "制限なし",
-    "resetRange": "範囲をリセット",
-    "dateRangeHint": "期間を作品番号の範囲に変換します。番号と日付の順序が異なる場合、期間外の作品が含まれることがあります。",
-    "heading": "メッセージ検索",
-    "placeholder": "メッセージテキストを検索...",
-    "mode": {
-      "contains": "含む",
-      "similar": "類似",
-      "lcs": "LCS"
-    },
-    "search": "検索",
-    "resultCount": "{{count}}件",
-    "empty": "一致するメッセージはありません",
-    "loading": "検索中...",
-    "error": "メッセージ検索に失敗しました",
-    "retry": "再試行",
-    "score": "スコア",
-    "correctness": "精度",
-    "page": "p{{page}}",
-    "disabled": "設定でメッセージ検索が無効です。",
-    "imageError": "画像の読み込みに失敗しました",
-    "invalidPage": "無効なページ",
-    "resultImageAlt": "ギャラリー{{id}} {{page}}ページ",
-    "columnWidth": "列幅",
-    "searchHistory": "検索履歴",
-    "historyCount": "{{count}}回",
-    "scrollToTop": "先頭へ"
-  },
-  "dateRange": {
-    "label": "作品の日付範囲",
-    "loading": "読み込み中…",
-    "error": "日付分布を読み込めません",
-    "retry": "再試行",
-    "reset": "リセット",
-    "count": "{{formattedCount}}作品",
-    "to": "終了日",
-    "from": "開始日"
-  },
-  "scopedMessageSearch": {
-    "open": "セリフ検索",
-    "title": "{{scope}}内のセリフ検索",
-    "scopeCount": "現在の絞り込み対象 {{formattedCount}}作品 · 作品全体のセリフ",
-    "emptyScope": "検索対象の作品がありません。絞り込み条件を確認してください。",
-    "close": "閉じる",
-    "preparing": "対象を確認中…",
-    "loadError": "検索対象を読み込めませんでした。再試行してください。",
-    "tooLarge": "一度に検索できるのは50,000作品までです。条件を絞り込んでください。"
+  "activity": {
+    "app": "アプリ",
+    "web": "ウェブ",
+    "downloaded": "{{source}}でダウンロード済み",
+    "read": "既読 · {{page}}ページ",
+    "downloadConfirm": "{{sources}}でダウンロードした記録があります。ウェブでもダウンロードしますか？",
+    "recordOnly": "他の端末で完了したダウンロード記録を含みます。共有記録にローカルファイルは含まれません。",
+    "resumeConfirm": "{{page}}ページまで読んだ記録があります。続きから読みますか？"
   }
 }

@@ -9,15 +9,7 @@
     "history": "Histórico",
     "downloads": "Downloads",
     "aiSearch": "Busca IA",
-    "settings": "Configurações",
-    "hot": "Hot",
-    "messageSearch": "Mensagens",
-    "llmSearch": "LLM Search",
-    "keywordGraph": "Keyword Graph",
-    "workExperiment": "Experiment",
-    "authorSimilarity": "Similar Authors",
-    "activity": "Activity",
-    "more": "Mais"
+    "settings": "Configurações"
   },
   "home": {
     "heading": "Explorar",
@@ -34,9 +26,7 @@
     "suggestions": "Sugestões",
     "recentSearches": "Buscas recentes",
     "clearRecent": "Limpar",
-    "includeQuery": "Incluir \"{{query}}\"",
-    "expandTags": "Mostrar todas as tags",
-    "collapseTags": "Mostrar uma linha"
+    "openInApp": "Abrir no app"
   },
   "article": {
     "artist": "Artista",
@@ -56,17 +46,9 @@
     "addBookmark": "Adicionar favorito",
     "add": "Adicionar",
     "cancel": "Cancelar",
-    "uncategorized": "Sem categoria"
-  },
-  "hot": {
-    "heading": "Hot",
-    "daily": "Daily",
-    "weekly": "Weekly",
-    "monthly": "Monthly",
-    "alltime": "All Time",
-    "setupRequired": "Developer mode and HMAC salt required.",
-    "setupHint": "Enable Developer Mode in Settings and configure HMAC Salt.",
-    "error": "Failed to load. Check developer settings."
+    "uncategorized": "Sem categoria",
+    "import": "Importar",
+    "export": "Exportar"
   },
   "history": {
     "heading": "Histórico"
@@ -141,11 +123,6 @@
       "pagination": "Paginação",
       "infinite": "Rolagem infinita"
     },
-    "viewer": {
-      "heading": "Visualizador",
-      "resumePrompt": "Perguntar se deve retomar",
-      "resumePromptDesc": "Mostra uma pergunta para ir à última página lida ao abrir uma obra"
-    },
     "tagTranslation": {
       "heading": "Tradução de tags",
       "korean": "Coreano",
@@ -163,13 +140,37 @@
       "enableDesc": "Mostrar aba de Busca IA na navegação",
       "helpText": "A busca IA requer o servidor violet-search rodando separadamente. Você precisa configurar e executar o serviço violet-search para usar esta funcionalidade."
     },
+    "exhentaiCookie": {
+      "heading": "Cookie do ExHentai",
+      "description": "Usado para carregar galerias do ExHentai quando os metadados do Hitomi não estão disponíveis. Galerias públicas do E-Hentai não precisam de cookie.",
+      "status": "Estado:",
+      "source": "Origem:",
+      "configured": "Configurado",
+      "notConfigured": "Não configurado",
+      "stored": "Arquivo de configurações web",
+      "environment": "Variável de ambiente .env",
+      "cookieLabel": "Valor completo do Cookie do ExHentai",
+      "cookiePlaceholder": "ipb_member_id=...; ipb_pass_hash=...; igneous=...",
+      "requiredValues": "ipb_member_id, ipb_pass_hash e igneous são obrigatórios.",
+      "save": "Salvar Cookie",
+      "remove": "Remover Cookie salvo",
+      "working": "Processando...",
+      "saved": "Cookie salvo. Ele será usado a partir da próxima solicitação.",
+      "removed": "O cookie salvo nas configurações web foi removido.",
+      "error": "Não foi possível concluir. Verifique o formato do cookie e o log do servidor.",
+      "environmentHint": "Um cookie do .env está ativo. Edite o .env no Pi e recrie o contêiner web para removê-lo.",
+      "securityNote": "O cookie contém informações de login. Não exponha este servidor à Internet. O valor salvo nunca é devolvido à página ou à API.",
+      "memberIdPlaceholder": "Valor do ID de membro",
+      "passHashPlaceholder": "Valor do hash da senha",
+      "igneousPlaceholder": "Valor do Igneous"
+    },
     "sync": {
       "heading": "Sincronização do banco de dados",
       "database": "Banco de dados:",
       "ready": "Pronto",
       "notFound": "Não encontrado",
       "lastSync": "Última sincronização:",
-      "lastSyncDb": "Última sincronização (DB):",
+      "lastSyncDb": "Versão do DB:",
       "never": "Nunca",
       "status": "Status:",
       "idle": "Inativo",
@@ -189,14 +190,6 @@
       "clear": "Limpar histórico de buscas",
       "empty": "Nenhuma busca recente"
     },
-    "developer": {
-      "heading": "Developer",
-      "enable": "Developer Mode",
-      "enableDesc": "Show developer settings for Hot tab",
-      "serverHost": "Server Host URL",
-      "hmacSalt": "HMAC Salt",
-      "hmacSaltPlaceholder": "Enter HMAC salt..."
-    },
     "suggestions": {
       "heading": "Cache de tags",
       "build": "Construir cache",
@@ -206,44 +199,13 @@
       "built": "Construído",
       "building": "Construindo...",
       "totalTags": "Total de tags"
-    },
-    "messageSearch": {
-      "heading": "Busca de mensagens",
-      "enable": "Ativar busca de mensagens",
-      "enableDesc": "Mostrar a aba de busca de mensagens na navegação",
-      "serverUrl": "URL do servidor fscm",
-      "serverUrlPlaceholder": "http://127.0.0.1:12332",
-      "resultLimit": "Limite de resultados",
-      "testConnection": "Testar conexão",
-      "testing": "Testando...",
-      "connectionOk": "Conectado",
-      "connectionFailed": "Falha na conexão",
-      "sampleCount": "{{count}} resultados de amostra"
-    },
-    "llmSearch": {
-      "heading": "LLM Search",
-      "enable": "Enable LLM Search",
-      "enableDesc": "Show LLM Search tab in navigation",
-      "serverUrl": "LLM search server URL",
-      "serverUrlPlaceholder": "http://127.0.0.1:8788",
-      "serverUrlDesc": "Used by the LLM Search tab.",
-      "testConnection": "Test Connection",
-      "testing": "Testing...",
-      "connectionOk": "Connected",
-      "connectionFailed": "Connection failed",
-      "workCount": "{{count}} indexed works"
-    },
-    "keywordGraph": {
-      "heading": "Keyword Graph",
-      "serverUrl": "work-keywords-go server URL",
-      "serverUrlPlaceholder": "http://127.0.0.1:8787",
-      "serverUrlDesc": "Keyword Graph tab server URL."
     }
   },
   "viewer": {
     "noImages": "Nenhuma imagem encontrada para esta galeria.",
     "back": "Voltar",
     "settings": "Configurações",
+    "openInApp": "Abrir no app",
     "pageInfo": "{{current}} / {{total}}",
     "loading": "Carregando...",
     "retrying": "Tentando novamente... ({{current}}/{{max}})",
@@ -279,35 +241,5 @@
         "title": "Espaçamento"
       }
     }
-  },
-  "activity": { "eyebrow": "Your library", "heading": "User activity", "subtitle": "A clear view of how you use Violet.", "reads": "Reads", "read": "Read", "bookmarks": "Bookmarks", "bookmark": "Bookmarked", "crops": "Crops", "crop": "Cropped", "downloads": "Downloads", "download": "Downloaded", "uniqueWorks": "Unique works", "trend": "Activity trend", "periodSummary": "{{total}} actions · {{days}} active days · {{average}} per active day", "days": "{{count}}d", "all": "All", "mix": "Activity mix", "mixSubtitle": "Share of all recorded actions", "recent": "Recent activity", "recentSubtitle": "Latest changes saved in user.db", "empty": "No activity yet", "error": "Failed to load user activity." },
-  "llmSearch": {
-    "heading": "LLM Search", "placeholder": "Describe a scene to search...", "search": "Search", "topK": "Top K", "candidateK": "Candidate K", "resultSummary": "{{count}} results in {{seconds}}s", "empty": "No LLM search results", "error": "Failed to search with LLM", "retry": "Retry", "disabled": "LLM search is disabled in Settings.", "rerankScore": "Rerank", "embedScore": "Embed", "imageError": "Failed to load image", "invalidPage": "Invalid page", "resultImageAlt": "Gallery {{id}} page {{page}}", "columnWidth": "Column width", "searchHistory": "LLM search history", "historyCount": "{{count}}x"
-  },
-  "messageSearch": {
-    "heading": "Busca de mensagens",
-    "placeholder": "Buscar texto de mensagem...",
-    "mode": {
-      "contains": "Contém",
-      "similar": "Similar",
-      "lcs": "LCS"
-    },
-    "search": "Buscar",
-    "resultCount": "{{count}} resultados",
-    "empty": "Nenhuma mensagem encontrada",
-    "loading": "Buscando...",
-    "error": "Falha na busca de mensagens",
-    "retry": "Tentar novamente",
-    "score": "Pontuação",
-    "correctness": "Precisão",
-    "page": "p{{page}}",
-    "disabled": "A busca de mensagens está desativada nas configurações.",
-    "imageError": "Falha ao carregar imagem",
-    "invalidPage": "Página inválida",
-    "resultImageAlt": "Galeria {{id}} página {{page}}",
-    "columnWidth": "Largura da coluna",
-    "searchHistory": "Histórico de pesquisa",
-    "historyCount": "{{count}}x",
-    "scrollToTop": "Voltar ao topo"
   }
 }

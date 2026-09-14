@@ -4,20 +4,19 @@
   },
   "nav": {
     "home": "홈",
+    "hot": "인기",
+    "messageSearch": "대사 검색",
+    "llmSearch": "LLM 검색",
+    "keywordGraph": "키워드 그래프",
+    "workExperiment": "작품 실험실",
+    "authorSimilarity": "유사 작가",
+    "activity": "활동 기록",
     "bookmarks": "북마크",
     "cropBookmarks": "크롭",
     "history": "기록",
     "downloads": "다운로드",
     "aiSearch": "AI 검색",
-    "settings": "설정",
-    "hot": "인기",
-    "messageSearch": "메시지",
-    "llmSearch": "LLM 검색",
-    "keywordGraph": "키워드 그래프",
-    "workExperiment": "실험",
-    "authorSimilarity": "유사 작가",
-    "activity": "사용자 활동",
-    "more": "메뉴"
+    "settings": "설정"
   },
   "home": {
     "heading": "둘러보기",
@@ -34,9 +33,7 @@
     "suggestions": "추천",
     "recentSearches": "최근 검색",
     "clearRecent": "삭제",
-    "includeQuery": "\"{{query}}\" 포함",
-    "expandTags": "태그 모두 보기",
-    "collapseTags": "한 줄만 보기"
+    "openInApp": "앱에서 열기"
   },
   "article": {
     "artist": "작가",
@@ -56,17 +53,9 @@
     "addBookmark": "북마크 추가",
     "add": "추가",
     "cancel": "취소",
-    "uncategorized": "미분류"
-  },
-  "hot": {
-    "heading": "인기",
-    "daily": "일간",
-    "weekly": "주간",
-    "monthly": "월간",
-    "alltime": "전체",
-    "setupRequired": "개발자 모드와 HMAC salt 설정이 필요합니다.",
-    "setupHint": "설정에서 개발자 모드를 활성화하고 HMAC Salt를 구성하세요.",
-    "error": "로드에 실패했습니다. 개발자 설정을 확인하세요."
+    "uncategorized": "미분류",
+    "import": "가져오기",
+    "export": "내보내기"
   },
   "history": {
     "heading": "기록"
@@ -147,15 +136,7 @@
       "heading": "디스플레이",
       "scrollMode": "스크롤 모드",
       "pagination": "페이지네이션",
-      "infinite": "무한 스크롤",
-      "tagClickAction": "태그 클릭 동작",
-      "tagClickSearch": "검색 페이지로 이동",
-      "tagClickDialog": "다이얼로그로 보기"
-    },
-    "viewer": {
-      "heading": "뷰어",
-      "resumePrompt": "최근 페이지 이동 물어보기",
-      "resumePromptDesc": "작품을 열 때 마지막으로 읽은 페이지로 이동할지 물어봅니다"
+      "infinite": "무한 스크롤"
     },
     "tagTranslation": {
       "heading": "태그 번역",
@@ -188,13 +169,37 @@
       "clearCache": "캐시 지우기",
       "clearing": "삭제 중..."
     },
+    "exhentaiCookie": {
+      "heading": "ExHentai 쿠키",
+      "description": "Hitomi에서 찾지 못한 작품을 ExHentai에서 불러올 때 사용합니다. E-Hentai 공개 작품에는 쿠키가 필요하지 않습니다.",
+      "status": "상태:",
+      "source": "저장 위치:",
+      "configured": "설정됨",
+      "notConfigured": "설정 안 됨",
+      "stored": "웹 설정 파일",
+      "environment": ".env 환경변수",
+      "cookieLabel": "ExHentai Cookie 전체 값",
+      "cookiePlaceholder": "ipb_member_id=...; ipb_pass_hash=...; igneous=...",
+      "requiredValues": "ipb_member_id, ipb_pass_hash, igneous가 모두 필요합니다.",
+      "save": "쿠키 저장",
+      "remove": "저장된 쿠키 삭제",
+      "working": "처리 중...",
+      "saved": "쿠키를 저장했습니다. 다음 요청부터 바로 적용됩니다.",
+      "removed": "웹에 저장한 쿠키를 삭제했습니다.",
+      "error": "처리하지 못했습니다. 쿠키 형식과 서버 로그를 확인하세요.",
+      "environmentHint": ".env 쿠키가 사용 중입니다. 제거하려면 Pi의 .env를 수정하고 웹 컨테이너를 다시 만드세요.",
+      "securityNote": "쿠키는 로그인 정보입니다. 이 서버를 외부 인터넷에 공개하지 마세요. 저장된 값은 화면이나 API로 다시 표시되지 않습니다.",
+      "memberIdPlaceholder": "회원 ID 값",
+      "passHashPlaceholder": "패스 해시 값",
+      "igneousPlaceholder": "Igneous 값"
+    },
     "sync": {
       "heading": "데이터베이스 동기화",
       "database": "데이터베이스:",
       "ready": "준비됨",
       "notFound": "찾을 수 없음",
       "lastSync": "마지막 동기화:",
-      "lastSyncDb": "마지막 동기화(DB):",
+      "lastSyncDb": "DB 버전:",
       "never": "없음",
       "status": "상태:",
       "idle": "대기 중",
@@ -215,14 +220,6 @@
       "clear": "검색 기록 지우기",
       "empty": "최근 검색 없음"
     },
-    "developer": {
-      "heading": "개발자",
-      "enable": "개발자 모드",
-      "enableDesc": "Hot 탭 및 외부 API 개발자 설정 표시",
-      "serverHost": "서버 호스트 URL",
-      "hmacSalt": "HMAC Salt",
-      "hmacSaltPlaceholder": "HMAC salt 입력..."
-    },
     "suggestions": {
       "heading": "태그 캐시",
       "build": "캐시 빌드",
@@ -231,67 +228,20 @@
       "notBuilt": "빌드 안됨",
       "built": "빌드됨",
       "building": "빌드 중...",
-      "totalTags": "총 태그 수",
-      "contextualCounts": "현재 검색 조건의 결과 수 계산",
-      "contextualCountsDesc": "현재 검색 조건에 맞춰 추천을 정렬합니다. 자동완성이 느려질 수 있습니다."
-    },
-    "messageSearch": {
-      "heading": "메시지 검색",
-      "enable": "메시지 검색 사용",
-      "enableDesc": "내비게이션에 메시지 검색 탭을 표시합니다",
-      "serverUrl": "fscm 서버 URL",
-      "serverUrlPlaceholder": "http://127.0.0.1:12332",
-      "resultLimit": "결과 제한",
-      "testConnection": "연결 테스트",
-      "testing": "테스트 중...",
-      "connectionOk": "연결됨",
-      "connectionFailed": "연결 실패",
-      "sampleCount": "샘플 {{count}}개"
-    },
-    "llmSearch": {
-      "heading": "LLM 검색",
-      "enable": "LLM 검색 사용",
-      "enableDesc": "내비게이션에 LLM 검색 탭을 표시합니다",
-      "serverUrl": "LLM 검색 서버 URL",
-      "serverUrlPlaceholder": "http://127.0.0.1:8788",
-      "serverUrlDesc": "LLM 검색 탭에서 사용할 서버 주소입니다.",
-      "testConnection": "연결 테스트",
-      "testing": "테스트 중...",
-      "connectionOk": "연결됨",
-      "connectionFailed": "연결 실패",
-      "workCount": "인덱스 작품 {{count}}개"
-    },
-    "keywordGraph": {
-      "heading": "키워드 그래프",
-      "serverUrl": "work-keywords-go 서버 URL",
-      "serverUrlPlaceholder": "http://127.0.0.1:8787",
-      "serverUrlDesc": "키워드 그래프 탭에서 사용할 work-keywords-go 서버 주소입니다."
+      "totalTags": "총 태그 수"
     }
   },
   "viewer": {
-    "mobileFullscreen": "모바일 전체화면 보기",
-    "mobileFullscreenHint": "뷰어를 열 때 전체화면으로 전환합니다. 자동 전환이 안 되면 화면을 한 번 터치해 주세요.",
     "noImages": "갤러리에서 이미지를 찾을 수 없습니다.",
     "back": "뒤로",
     "settings": "설정",
-    "more": "\uBA54\uB274",
+    "openInApp": "앱에서 열기",
     "pageInfo": "{{current}} / {{total}}",
-    "intensity": {
-      "label": "대사 고조도",
-      "ariaLabel": "{{page}}페이지, 대사 고조도 100점 중 {{score}}점"
-    },
     "loading": "로딩 중...",
     "retrying": "재시도 중... ({{current}}/{{max}})",
     "loadError": "{{max}}번 시도 후 이미지 로드 실패. 클릭하여 재시도.",
     "settingsPanel": {
       "title": "뷰어 설정",
-      "profile": {
-        "title": "설정 프로필",
-        "auto": "자동",
-        "mobile": "모바일",
-        "desktop": "데스크톱",
-        "active": "{{profile}} 설정 사용 중"
-      },
       "pageMode": {
         "title": "페이지 모드",
         "scroll": "스크롤",
@@ -332,87 +282,34 @@
       }
     },
     "resume": {
-      "title": "이어서 읽기",
-      "message": "{{page}} / {{total}} 페이지까지 읽었습니다. 이어서 읽으시겠습니까?",
-      "resume": "이어서 읽기",
-      "startOver": "처음부터"
+      "title": "이어서 읽을까요?",
+      "message": "{{page}} / {{total}} 페이지까지 읽었습니다. 이어서 볼까요?",
+      "resume": "이어서 보기",
+      "startOver": "처음부터 보기"
     }
   },
+  "bookmarkSync": {
+    "heading": "앱·웹 기록 동기화",
+    "description": "작품 북마크·읽은 기록·완료한 다운로드 기록을 공유합니다. 폴더·작가 북마크·파일은 기기에 유지되고, 새 북마크는 미분류 폴더에 들어갑니다.",
+    "token": "동기화 토큰",
+    "interval": "자동 동기화 주기",
+    "daily": "하루 한 번",
+    "weekly": "일주일 한 번",
+    "save": "저장",
+    "now": "지금 동기화",
+    "busy": "동기화 중…",
+    "saved": "설정을 저장했습니다. 토큰을 비우면 동기화가 꺼집니다.",
+    "notReady": "동기화가 꺼져 있거나 다른 동기화가 진행 중입니다.",
+    "success": "동기화 완료: 중복을 제외한 작품 {{count}}개.",
+    "error": "동기화 실패. 토큰과 WalnutPi 네트워크 연결을 확인해 주세요. 기기의 북마크는 보존됩니다."
+  },
   "activity": {
-    "eyebrow": "나의 라이브러리", "heading": "사용자 활동", "subtitle": "Violet에서 쌓인 활동을 한눈에 확인하세요.",
-    "reads": "읽기", "read": "읽음", "bookmarks": "북마크", "bookmark": "북마크 추가", "crops": "크롭", "crop": "크롭 저장", "downloads": "다운로드", "download": "다운로드", "uniqueWorks": "고유 작품", "actions": "회",
-    "trend": "활동 추이", "periodSummary": "활동 {{total}}회 · 활동일 {{days}}일 · 활동일 평균 {{average}}회", "days": "{{count}}일", "all": "전체",
-    "mix": "활동 구성", "mixSubtitle": "전체 기록에서 각 활동이 차지하는 비중", "recent": "최근 활동", "recentSubtitle": "user.db에 최근 저장된 변경 사항", "ranking": "많이 본 작품", "rankingSubtitle": "4시간을 넘는 방치 세션은 시간 집계에서 제외됩니다", "rankingDialog": "상위 50개 작품", "showMore": "더보기", "close": "닫기", "rank": { "reads": "본 횟수", "recordedSeconds": "누적 시간", "averageSessionSeconds": "평균 세션", "secondsPerPageEstimate": "페이지당(추정)" }, "time": { "hours": "시간", "minutes": "분", "seconds": "초", "sessions": "회", "recorded": "기록" }, "empty": "아직 활동 기록이 없습니다", "error": "사용자 활동을 불러오지 못했습니다."
-  },
-  "llmSearch": {
-    "heading": "LLM 검색",
-    "placeholder": "찾고 싶은 장면을 설명하세요...",
-    "search": "검색",
-    "topK": "Top K",
-    "candidateK": "Candidate K",
-    "resultSummary": "{{seconds}}초 · 결과 {{count}}개",
-    "empty": "LLM 검색 결과가 없습니다",
-    "error": "LLM 검색 중 오류가 발생했습니다",
-    "retry": "다시 시도",
-    "disabled": "설정에서 LLM 검색이 비활성화되어 있습니다.",
-    "rerankScore": "리랭크",
-    "embedScore": "임베딩",
-    "imageError": "이미지 로드 실패",
-    "invalidPage": "잘못된 페이지",
-    "resultImageAlt": "갤러리 {{id}} {{page}}페이지",
-    "columnWidth": "열 너비",
-    "searchHistory": "LLM 검색 기록",
-    "historyCount": "{{count}}회"
-  },
-  "messageSearch": {
-    "idMin": "시작 번호",
-    "idMax": "끝 번호",
-    "noBound": "제한 없음",
-    "resetRange": "범위 초기화",
-    "dateRangeHint": "기간을 작품 번호 범위로 변환해 검색합니다. 번호와 날짜 순서가 다르면 기간 밖의 작품이 포함될 수 있습니다.",
-    "heading": "메시지 검색",
-    "placeholder": "메시지 텍스트 검색...",
-    "mode": {
-      "contains": "포함",
-      "similar": "유사",
-      "lcs": "LCS"
-    },
-    "search": "검색",
-    "resultCount": "{{count}}개 결과",
-    "empty": "메시지 검색 결과가 없습니다",
-    "loading": "검색 중...",
-    "error": "메시지 검색 중 오류가 발생했습니다",
-    "retry": "재시도",
-    "score": "점수",
-    "correctness": "정확도",
-    "page": "{{page}}페이지",
-    "disabled": "설정에서 메시지 검색이 비활성화되어 있습니다.",
-    "imageError": "이미지 로드 실패",
-    "invalidPage": "잘못된 페이지",
-    "resultImageAlt": "갤러리 {{id}} {{page}}페이지",
-    "columnWidth": "열 너비",
-    "searchHistory": "검색 기록",
-    "historyCount": "{{count}}회",
-    "scrollToTop": "맨 위로"
-  },
-  "dateRange": {
-    "label": "작품 날짜 범위",
-    "loading": "불러오는 중…",
-    "error": "날짜 분포 로드 실패",
-    "retry": "다시 시도",
-    "reset": "초기화",
-    "count": "{{formattedCount}}개 작품",
-    "to": "종료 날짜",
-    "from": "시작 날짜"
-  },
-  "scopedMessageSearch": {
-    "open": "대사 검색",
-    "title": "{{scope}} 내 대사 검색",
-    "scopeCount": "현재 필터 기준 {{formattedCount}}개 작품 · 작품 전체 대사",
-    "emptyScope": "검색할 작품이 없습니다. 목록의 필터를 확인해 주세요.",
-    "close": "닫기",
-    "preparing": "대상 확인 중…",
-    "loadError": "검색 대상을 불러오지 못했습니다. 다시 시도해 주세요.",
-    "tooLarge": "한 번에 최대 50,000개 작품을 검색할 수 있습니다. 목록 필터로 범위를 줄여 주세요."
+    "app": "앱",
+    "web": "웹",
+    "downloaded": "{{source}}에서 다운로드함",
+    "read": "읽음 · {{page}}페이지",
+    "downloadConfirm": "{{sources}}에서 다운로드한 기록이 있습니다. 웹에서도 다운로드할까요?",
+    "recordOnly": "다른 기기에서 완료한 다운로드 기록도 포함됩니다. 공유 기록에는 이 기기의 파일이 없습니다.",
+    "resumeConfirm": "{{page}}페이지까지 읽은 기록이 있습니다. 이어서 볼까요?"
   }
 }

@@ -12,6 +12,7 @@ import styles from './ArticlePage.module.css';
 
 export function ArticlePage() {
   const { t } = useTranslation();
+
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const articleId = parseInt(id!);

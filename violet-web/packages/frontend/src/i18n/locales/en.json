@@ -4,20 +4,19 @@
   },
   "nav": {
     "home": "Home",
+    "hot": "Hot",
+    "messageSearch": "Message Search",
+    "llmSearch": "LLM Search",
+    "keywordGraph": "Keyword Graph",
+    "workExperiment": "Work Experiment",
+    "authorSimilarity": "Similar Authors",
+    "activity": "Activity",
     "bookmarks": "Bookmarks",
     "cropBookmarks": "Crops",
     "history": "History",
     "downloads": "Downloads",
     "aiSearch": "AI Search",
-    "settings": "Settings",
-    "hot": "Hot",
-    "messageSearch": "Message",
-    "llmSearch": "LLM Search",
-    "keywordGraph": "Keyword Graph",
-    "workExperiment": "Experiment",
-    "authorSimilarity": "Similar Authors",
-    "activity": "Activity",
-    "more": "More"
+    "settings": "Settings"
   },
   "home": {
     "heading": "Browse",
@@ -34,9 +33,7 @@
     "suggestions": "Suggestions",
     "recentSearches": "Recent Searches",
     "clearRecent": "Clear",
-    "includeQuery": "Include \"{{query}}\"",
-    "expandTags": "Show all tags",
-    "collapseTags": "Show one row"
+    "openInApp": "Open in app"
   },
   "article": {
     "artist": "Artist",
@@ -56,17 +53,9 @@
     "addBookmark": "Add Bookmark",
     "add": "Add",
     "cancel": "Cancel",
-    "uncategorized": "Uncategorized"
-  },
-  "hot": {
-    "heading": "Hot",
-    "daily": "Daily",
-    "weekly": "Weekly",
-    "monthly": "Monthly",
-    "alltime": "All Time",
-    "setupRequired": "Developer mode and HMAC salt required.",
-    "setupHint": "Enable Developer Mode in Settings and configure HMAC Salt.",
-    "error": "Failed to load. Check developer settings."
+    "uncategorized": "Uncategorized",
+    "import": "Import",
+    "export": "Export"
   },
   "history": {
     "heading": "History"
@@ -147,15 +136,7 @@
       "heading": "Display",
       "scrollMode": "Scroll Mode",
       "pagination": "Pagination",
-      "infinite": "Infinite Scroll",
-      "tagClickAction": "Tag Click Action",
-      "tagClickSearch": "Navigate to Search",
-      "tagClickDialog": "Show in Dialog"
-    },
-    "viewer": {
-      "heading": "Viewer",
-      "resumePrompt": "Ask to resume reading",
-      "resumePromptDesc": "Show a prompt to jump to the last read page when opening a work"
+      "infinite": "Infinite Scroll"
     },
     "tagTranslation": {
       "heading": "Tag Translation",
@@ -188,13 +169,37 @@
       "clearCache": "Clear Cache",
       "clearing": "Clearing..."
     },
+    "exhentaiCookie": {
+      "heading": "ExHentai Cookie",
+      "description": "Used to load galleries from ExHentai when Hitomi metadata is unavailable. Public E-Hentai galleries do not require a cookie.",
+      "status": "Status:",
+      "source": "Source:",
+      "configured": "Configured",
+      "notConfigured": "Not configured",
+      "stored": "Web settings file",
+      "environment": ".env environment variable",
+      "cookieLabel": "Complete ExHentai Cookie value",
+      "cookiePlaceholder": "ipb_member_id=...; ipb_pass_hash=...; igneous=...",
+      "requiredValues": "ipb_member_id, ipb_pass_hash, and igneous are all required.",
+      "save": "Save Cookie",
+      "remove": "Remove Stored Cookie",
+      "working": "Working...",
+      "saved": "Cookie saved. It will be used for the next request.",
+      "removed": "The cookie stored by the web settings was removed.",
+      "error": "Could not complete the request. Check the cookie format and server log.",
+      "environmentHint": "A .env cookie is active. Edit .env on the Pi and recreate the web container to remove it.",
+      "securityNote": "A cookie is login information. Do not expose this server to the public internet. The stored value is never returned to the page or API.",
+      "memberIdPlaceholder": "Member ID",
+      "passHashPlaceholder": "Pass hash",
+      "igneousPlaceholder": "Igneous value"
+    },
     "sync": {
       "heading": "Database Sync",
       "database": "Database:",
       "ready": "Ready",
       "notFound": "Not Found",
       "lastSync": "Last Sync:",
-      "lastSyncDb": "Last Sync (DB):",
+      "lastSyncDb": "DB Version:",
       "never": "Never",
       "status": "Status:",
       "idle": "Idle",
@@ -215,14 +220,6 @@
       "clear": "Clear Search History",
       "empty": "No recent searches"
     },
-    "developer": {
-      "heading": "Developer",
-      "enable": "Developer Mode",
-      "enableDesc": "Show developer settings for Hot tab",
-      "serverHost": "Server Host URL",
-      "hmacSalt": "HMAC Salt",
-      "hmacSaltPlaceholder": "Enter HMAC salt..."
-    },
     "suggestions": {
       "heading": "Tag Cache",
       "build": "Build Cache",
@@ -231,67 +228,20 @@
       "notBuilt": "Not built",
       "built": "Built",
       "building": "Building...",
-      "totalTags": "Total Tags",
-      "contextualCounts": "Calculate contextual result counts",
-      "contextualCountsDesc": "Rank suggestions by the current search filters. This can slow autocomplete."
-    },
-    "messageSearch": {
-      "heading": "Message Search",
-      "enable": "Enable Message Search",
-      "enableDesc": "Show Message Search tab in navigation",
-      "serverUrl": "fscm server URL",
-      "serverUrlPlaceholder": "http://127.0.0.1:12332",
-      "resultLimit": "Result Limit",
-      "testConnection": "Test Connection",
-      "testing": "Testing...",
-      "connectionOk": "Connected",
-      "connectionFailed": "Connection failed",
-      "sampleCount": "{{count}} sample results"
-    },
-    "llmSearch": {
-      "heading": "LLM Search",
-      "enable": "Enable LLM Search",
-      "enableDesc": "Show LLM Search tab in navigation",
-      "serverUrl": "LLM search server URL",
-      "serverUrlPlaceholder": "http://127.0.0.1:8788",
-      "serverUrlDesc": "Used by the LLM Search tab.",
-      "testConnection": "Test Connection",
-      "testing": "Testing...",
-      "connectionOk": "Connected",
-      "connectionFailed": "Connection failed",
-      "workCount": "{{count}} indexed works"
-    },
-    "keywordGraph": {
-      "heading": "Keyword Graph",
-      "serverUrl": "work-keywords-go server URL",
-      "serverUrlPlaceholder": "http://127.0.0.1:8787",
-      "serverUrlDesc": "Used by the keyword graph tab. Start work-keywords-go serve and set its base URL here."
+      "totalTags": "Total Tags"
     }
   },
   "viewer": {
-    "mobileFullscreen": "Mobile fullscreen",
-    "mobileFullscreenHint": "Enter fullscreen when opening the viewer. If it does not start automatically, tap the screen once.",
     "noImages": "No images found for this gallery.",
     "back": "Back",
     "settings": "Settings",
-    "more": "More",
+    "openInApp": "Open in app",
     "pageInfo": "{{current}} / {{total}}",
-    "intensity": {
-      "label": "Dialogue intensity",
-      "ariaLabel": "Page {{page}}, dialogue intensity {{score}} out of 100"
-    },
     "loading": "Loading...",
     "retrying": "Retrying... ({{current}}/{{max}})",
     "loadError": "Failed to load image after {{max}} attempts. Click to retry.",
     "settingsPanel": {
       "title": "Viewer Settings",
-      "profile": {
-        "title": "Settings Profile",
-        "auto": "Auto",
-        "mobile": "Mobile",
-        "desktop": "Desktop",
-        "active": "Using {{profile}} settings"
-      },
       "pageMode": {
         "title": "Page Mode",
         "scroll": "Scroll",
@@ -330,89 +280,30 @@
         "twoPage": "Single / Two-page",
         "close": "Close viewer"
       }
-    },
-    "resume": {
-      "title": "Resume Reading",
-      "message": "You were on page {{page}} / {{total}}. Resume where you left off?",
-      "resume": "Resume",
-      "startOver": "Start Over"
     }
   },
+  "bookmarkSync": {
+    "heading": "App/web record sync",
+    "description": "Sync article bookmarks, reading progress and completed-download records. Folders, artist bookmarks and files stay on each device. New bookmarks enter the default folder.",
+    "token": "Sync token",
+    "interval": "Automatic sync interval",
+    "daily": "Once per day",
+    "weekly": "Once per week",
+    "save": "Save",
+    "now": "Sync now",
+    "busy": "Syncing…",
+    "saved": "Settings saved. An empty token disables synchronization.",
+    "notReady": "Sync is disabled or another sync is running.",
+    "success": "Sync complete: {{count}} distinct bookmarked articles.",
+    "error": "Sync failed. Check the token and connect to the WalnutPi network; your local bookmarks are retained."
+  },
   "activity": {
-    "eyebrow": "Your library", "heading": "User activity", "subtitle": "A clear view of how you use Violet.",
-    "reads": "Reads", "read": "Read", "bookmarks": "Bookmarks", "bookmark": "Bookmarked", "crops": "Crops", "crop": "Cropped", "downloads": "Downloads", "download": "Downloaded", "uniqueWorks": "Unique works", "actions": "actions",
-    "trend": "Activity trend", "periodSummary": "{{total}} actions · {{days}} active days · {{average}} per active day", "days": "{{count}}d", "all": "All",
-    "mix": "Activity mix", "mixSubtitle": "Share of all recorded actions", "recent": "Recent activity", "recentSubtitle": "Latest changes saved in user.db", "ranking": "Most-read works", "rankingSubtitle": "Sessions longer than four hours are excluded", "rankingDialog": "Top 50 works", "showMore": "Show more", "close": "Close", "rank": { "reads": "Sessions", "recordedSeconds": "Total time", "averageSessionSeconds": "Avg. session", "secondsPerPageEstimate": "Per page (est.)" }, "time": { "hours": "h", "minutes": "m", "seconds": "s", "sessions": " sessions", "recorded": "recorded" }, "empty": "No activity yet", "error": "Failed to load user activity."
-  },
-  "llmSearch": {
-    "heading": "LLM Search",
-    "placeholder": "Describe a scene to search...",
-    "search": "Search",
-    "topK": "Top K",
-    "candidateK": "Candidate K",
-    "resultSummary": "{{count}} results in {{seconds}}s",
-    "empty": "No LLM search results",
-    "error": "Failed to search with LLM",
-    "retry": "Retry",
-    "disabled": "LLM search is disabled in Settings.",
-    "rerankScore": "Rerank",
-    "embedScore": "Embed",
-    "imageError": "Failed to load image",
-    "invalidPage": "Invalid page",
-    "resultImageAlt": "Gallery {{id}} page {{page}}",
-    "columnWidth": "Column width",
-    "searchHistory": "LLM search history",
-    "historyCount": "{{count}}x"
-  },
-  "messageSearch": {
-    "idMin": "Minimum ID",
-    "idMax": "Maximum ID",
-    "noBound": "No limit",
-    "resetRange": "Reset range",
-    "dateRangeHint": "Dates are converted to an article ID range. Results may fall outside the period when ID and date order differ.",
-    "heading": "Message Search",
-    "placeholder": "Search message text...",
-    "mode": {
-      "contains": "Contains",
-      "similar": "Similar",
-      "lcs": "LCS"
-    },
-    "search": "Search",
-    "resultCount": "{{count}} results",
-    "empty": "No message matches",
-    "loading": "Searching...",
-    "error": "Failed to search messages",
-    "retry": "Retry",
-    "score": "Score",
-    "correctness": "Correctness",
-    "page": "p{{page}}",
-    "disabled": "Message search is disabled in Settings.",
-    "imageError": "Failed to load image",
-    "invalidPage": "Invalid page",
-    "resultImageAlt": "Gallery {{id}} page {{page}}",
-    "columnWidth": "Column width",
-    "searchHistory": "Search history",
-    "historyCount": "{{count}}x",
-    "scrollToTop": "Scroll to top"
-  },
-  "dateRange": {
-    "label": "Publication date range",
-    "loading": "Loading…",
-    "error": "Date distribution unavailable",
-    "retry": "Retry",
-    "reset": "Reset",
-    "count": "{{formattedCount}} works",
-    "to": "End date",
-    "from": "Start date"
-  },
-  "scopedMessageSearch": {
-    "open": "Search dialogue",
-    "title": "Search dialogue in {{scope}}",
-    "scopeCount": "{{formattedCount}} works matching current filters · All dialogue in each work",
-    "emptyScope": "No works to search. Check the list filters.",
-    "close": "Close",
-    "preparing": "Preparing…",
-    "loadError": "Could not load search targets. Please try again.",
-    "tooLarge": "Search up to 50,000 works at a time. Narrow the list filters."
+    "app": "app",
+    "web": "web",
+    "downloaded": "Downloaded on {{source}}",
+    "read": "Read · page {{page}}",
+    "downloadConfirm": "This work has a completed download record on {{sources}}. Download it on the web too?",
+    "recordOnly": "Includes downloads completed on other devices. Shared records do not provide local files.",
+    "resumeConfirm": "Previously read through page {{page}}. Continue from that page?"
   }
 }

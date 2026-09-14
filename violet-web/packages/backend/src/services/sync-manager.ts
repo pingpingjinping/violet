@@ -1,11 +1,15 @@
 import fs from 'fs';
 import path from 'path';
 import Database from 'better-sqlite3';
+import { execFile } from 'child_process';
 import { fileURLToPath } from 'url';
+import { promisify } from 'util';
 import { getDbPath, getContentDb, closeContentDb, reopenContentDb } from './content-db.js';
 import { buildSuggestionCache } from './suggestion-engine.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const execFileAsync = promisify(execFile);
+const SEVEN_Z_COMMANDS = ['7za', '7z'];
 
 interface SyncInfoRecord {
   type: 'db' | 'chunk';
@@ -35,6 +39,8 @@ export interface SyncProgress {
   lastSyncDb: string | null;
   dbExists: boolean;
   error: string | null;
+  databaseVersion: string | null;
+  hostManaged: boolean;
   progress?: {
     current: number;
     total: number;
@@ -51,10 +57,12 @@ export class SyncManager {
   private currentProgress?: { current: number; total: number; message: string };
   private statePath: string;
   private dataDir: string;
+  private hostSyncDir: string | null;
 
   private constructor() {
     this.dataDir = path.resolve(__dirname, '../../data');
     this.statePath = path.join(this.dataDir, 'sync-state.json');
+    this.hostSyncDir = process.env.HOST_SYNC_DIR?.trim() || null;
   }
 
   static getInstance(): SyncManager {
@@ -70,6 +78,12 @@ export class SyncManager {
     // Ensure data directory exists
     if (!fs.existsSync(this.dataDir)) {
       fs.mkdirSync(this.dataDir, { recursive: true });
+    }
+
+    if (this.hostSyncDir) {
+      fs.mkdirSync(this.hostSyncDir, { recursive: true });
+      console.log(`[SyncManager] Host-managed sync enabled: ${this.hostSyncDir}`);
+      return;
     }
 
     // Check if DB exists
@@ -106,6 +120,11 @@ export class SyncManager {
   }
 
   async checkAndSync(): Promise<void> {
+    if (this.hostSyncDir) {
+      this.requestHostSync();
+      return;
+    }
+
     if (this.isSyncing) {
       console.log('[SyncManager] Sync already in progress, skipping');
       return;
@@ -173,6 +192,11 @@ export class SyncManager {
   }
 
   async triggerFullSync(): Promise<void> {
+    if (this.hostSyncDir) {
+      this.requestHostSync();
+      return;
+    }
+
     if (this.isSyncing) {
       throw new Error('Sync already in progress');
     }
@@ -180,20 +204,103 @@ export class SyncManager {
   }
 
   getStatus(): SyncProgress {
+    if (this.hostSyncDir) {
+      return this.getHostSyncStatus();
+    }
+
     const state = this.loadState();
+    const databaseVersion = this.getDatabaseVersion();
     return {
       status: this.currentStatus,
       lastSync: state.lastSyncAt || null,
       lastSyncDb: state.databaseSync,
       dbExists: fs.existsSync(getDbPath()),
       error: this.currentError,
+      databaseVersion,
+      hostManaged: false,
       progress: this.currentProgress,
     };
   }
 
+  private requestHostSync(): void {
+    if (!this.hostSyncDir) return;
+
+    const requestPath = path.join(this.hostSyncDir, '.violet-hsync-request');
+    const status = this.getHostSyncStatus();
+    if (status.status === 'checking' || status.status === 'applying_chunks') {
+      return;
+    }
+
+    try {
+      fs.writeFileSync(requestPath, new Date().toISOString() + '\n', {
+        encoding: 'utf-8',
+        flag: 'wx',
+      });
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'EEXIST') throw error;
+    }
+
+    this.currentStatus = 'checking';
+    this.currentError = null;
+  }
+
+  private getHostSyncStatus(): SyncProgress {
+    if (!this.hostSyncDir) {
+      throw new Error('Host sync directory is not configured');
+    }
+
+    const requestPath = path.join(this.hostSyncDir, '.violet-hsync-request');
+    const state = this.readHostSyncFile('.violet-hsync-state');
+    const completedAt = this.readHostSyncFile('.violet-hsync-completed-at');
+    const databaseVersion = completedAt || this.getDatabaseVersion();
+
+    let status: SyncStatus = 'idle';
+    if (fs.existsSync(requestPath)) {
+      status = 'checking';
+    } else if (state === 'running') {
+      status = 'applying_chunks';
+    } else if (state === 'error') {
+      status = 'error';
+    }
+
+    const error =
+      status === 'error'
+        ? this.readHostSyncFile('.violet-hsync-error') || 'Pi database sync failed'
+        : null;
+
+    return {
+      status,
+      lastSync: completedAt,
+      lastSyncDb: databaseVersion,
+      dbExists: fs.existsSync(getDbPath()),
+      error,
+      databaseVersion,
+      hostManaged: true,
+    };
+  }
+
+  private readHostSyncFile(name: string): string | null {
+    if (!this.hostSyncDir) return null;
+    try {
+      const value = fs.readFileSync(path.join(this.hostSyncDir, name), 'utf-8').trim();
+      return value || null;
+    } catch {
+      return null;
+    }
+  }
+
+  private getDatabaseVersion(): string | null {
+    try {
+      return fs.statSync(getDbPath()).mtime.toISOString();
+    } catch {
+      return null;
+    }
+  }
+
   private async parseSyncVersion(): Promise<SyncInfoRecord[]> {
-    const branch = 'master';
-    const url = `https://raw.githubusercontent.com/violet-dev/sync-data/${branch}/syncversion.txt`;
+    const branch = 'main';
+    const url = `https://raw.githubusercontent.com/TaYaKi71751/sync-data/${branch}/syncversion.txt`;
 
     const response = await fetch(url);
     if (!response.ok) {
@@ -255,15 +362,15 @@ export class SyncManager {
       this.currentProgress = { current: 0, total: contentLength || 100, message: `Downloading database (0/${totalMB} MB)` };
 
       const dbPath = getDbPath();
-      const tempPath = dbPath + '.tmp';
+      const archivePath = dbPath + '.tmp.7z';
 
       if (!response.body) {
         // Fallback: no streaming support
         const buffer = await response.arrayBuffer();
-        fs.writeFileSync(tempPath, Buffer.from(buffer));
+        fs.writeFileSync(archivePath, Buffer.from(buffer));
       } else {
         // Stream to file with progress updates
-        const fileStream = fs.createWriteStream(tempPath);
+        const fileStream = fs.createWriteStream(archivePath);
         const reader = response.body.getReader();
         let received = 0;
 
@@ -290,6 +397,9 @@ export class SyncManager {
         console.log(`[SyncManager] Downloaded ${(received / 1024 / 1024).toFixed(1)}MB`);
       }
 
+      this.currentProgress = { current: contentLength || 100, total: contentLength || 100, message: 'Extracting database' };
+      const extractedDb = await this.extractDatabaseArchive(archivePath, language);
+
       this.currentProgress = { current: contentLength || 100, total: contentLength || 100, message: 'Saving database' };
 
       // Close existing DB connection
@@ -299,7 +409,9 @@ export class SyncManager {
       if (fs.existsSync(dbPath)) {
         fs.unlinkSync(dbPath);
       }
-      fs.renameSync(tempPath, dbPath);
+      fs.renameSync(extractedDb.path, dbPath);
+      fs.rmSync(extractedDb.extractDir, { recursive: true, force: true });
+      fs.unlinkSync(archivePath);
 
       // Reopen DB
       reopenContentDb();
@@ -338,6 +450,82 @@ export class SyncManager {
       this.isSyncing = false;
       this.currentProgress = undefined;
     }
+  }
+
+  private async extractDatabaseArchive(archivePath: string, language: string): Promise<{ path: string; extractDir: string }> {
+    const extractDir = fs.mkdtempSync(path.join(this.dataDir, 'db-extract-'));
+
+    try {
+      const sevenZipCommand = this.resolveSevenZipCommand();
+      await execFileAsync(sevenZipCommand, ['x', archivePath, `-o${extractDir}`, '-y']);
+
+      const dbLanguage = this.translateToLanguage(language);
+      const expectedDbPath = path.join(
+        extractDir,
+        `rawdata${dbLanguage ? `-${dbLanguage}` : ''}`,
+        'data.db',
+      );
+      const extractedDbPath = fs.existsSync(expectedDbPath)
+        ? expectedDbPath
+        : this.findExtractedDb(extractDir);
+
+      if (!extractedDbPath) {
+        throw new Error(`Extracted archive did not contain ${path.relative(extractDir, expectedDbPath)}`);
+      }
+
+      return { path: extractedDbPath, extractDir };
+    } catch (error) {
+      fs.rmSync(extractDir, { recursive: true, force: true });
+      throw error;
+    }
+  }
+
+  private resolveSevenZipCommand(): string {
+    const configuredCommand = process.env.SEVEN_Z_BIN;
+    if (configuredCommand) {
+      return configuredCommand;
+    }
+
+    for (const command of SEVEN_Z_COMMANDS) {
+      const resolvedPath = this.findExecutableInPath(command);
+      if (resolvedPath) {
+        return resolvedPath;
+      }
+    }
+
+    throw new Error('7za/7z executable not found. Install p7zip in the runtime image or set SEVEN_Z_BIN.');
+  }
+
+  private findExecutableInPath(command: string): string | null {
+    const pathDirs = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
+
+    for (const dir of pathDirs) {
+      const commandPath = path.join(dir, command);
+      try {
+        fs.accessSync(commandPath, fs.constants.X_OK);
+        return commandPath;
+      } catch {
+        // Keep searching PATH.
+      }
+    }
+
+    return null;
+  }
+
+  private findExtractedDb(dir: string): string | null {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const entryPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        const dbPath = this.findExtractedDb(entryPath);
+        if (dbPath) return dbPath;
+      } else if (entry.isFile() && entry.name.endsWith('.db')) {
+        return entryPath;
+      }
+    }
+
+    return null;
   }
 
   private async syncChunks(chunks: SyncInfoRecord[]): Promise<void> {
@@ -453,11 +641,11 @@ export class SyncManager {
 
   private getDbPostfix(language: string): string {
     const postfixes: Record<string, string> = {
-      global: '.db',
-      ko: '-korean.db',
-      en: '-english.db',
-      ja: '-japanese.db',
-      zh: '-chinese.db',
+      global: '.7z',
+      ko: '-korean.7z',
+      en: '-english.7z',
+      ja: '-japanese.7z',
+      zh: '-chinese.7z',
     };
     return postfixes[language] || '.db';
   }
