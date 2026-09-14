@@ -9,6 +9,7 @@
 
 import type { ImageList } from '@violet-web/shared';
 import { getContentDb } from './content-db.js';
+import { getEhCookie } from './eh-cookie-store.js';
 
 const BASE_DOMAIN = 'gold-usergeneratedcontent.net';
 const GG_JS_URL = `https://ltn.${BASE_DOMAIN}/gg.js`;
@@ -58,13 +59,6 @@ async function fetchText(url: string, headers?: Record<string, string>): Promise
   });
   if (!res.ok) throw new UpstreamHttpError(url, res.status);
   return res.text();
-}
-
-function getEhCookie(): string | null {
-  const cookie = process.env.EXHENTAI_COOKIE?.trim();
-  if (!cookie) return null;
-  if (/[\r\n]/.test(cookie)) throw new Error('EXHENTAI_COOKIE contains invalid characters');
-  return cookie;
 }
 
 function getEhMetadata(id: number): EhGalleryMetadata | null {

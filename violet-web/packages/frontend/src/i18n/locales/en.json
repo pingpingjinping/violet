@@ -188,6 +188,27 @@
       "clearCache": "Clear Cache",
       "clearing": "Clearing..."
     },
+    "exhentaiCookie": {
+      "heading": "ExHentai Cookie",
+      "description": "Used to load galleries from ExHentai when Hitomi metadata is unavailable. Public E-Hentai galleries do not require a cookie.",
+      "status": "Status:",
+      "source": "Source:",
+      "configured": "Configured",
+      "notConfigured": "Not configured",
+      "stored": "Web settings file",
+      "environment": ".env environment variable",
+      "cookieLabel": "Complete ExHentai Cookie value",
+      "cookiePlaceholder": "ipb_member_id=...; ipb_pass_hash=...; igneous=...",
+      "requiredValues": "ipb_member_id, ipb_pass_hash, and igneous are all required.",
+      "save": "Save Cookie",
+      "remove": "Remove Stored Cookie",
+      "working": "Working...",
+      "saved": "Cookie saved. It will be used for the next request.",
+      "removed": "The cookie stored by the web settings was removed.",
+      "error": "Could not complete the request. Check the cookie format and server log.",
+      "environmentHint": "A .env cookie is active. Edit .env on the Pi and recreate the web container to remove it.",
+      "securityNote": "A cookie is login information. Do not expose this server to the public internet. The stored value is never returned to the page or API."
+    },
     "sync": {
       "heading": "Database Sync",
       "database": "Database:",
