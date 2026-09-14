@@ -1,6 +1,6 @@
 import { syncActivity } from './activity-sync';
 import { getGroups, getBookmarkArticles, addBookmarkArticle, deleteBookmarkArticle } from '../api/bookmarks';
-import { transactBookmarkSync } from './user-database';
+import { getBookmarkSyncState, transactBookmarkSync } from './user-database';
 
 const CONFIG_KEY = 'violet-bookmark-sync-config';
 const ENDPOINT = `${window.location.protocol}//${window.location.hostname}:3002/api/bookmark-sync`;
@@ -39,20 +39,32 @@ export function syncBookmarks(force = false): Promise<number | null> {
 async function syncArticleBookmarks(force: boolean): Promise<number | null> {
   const config = getBookmarkSyncConfig();
   if (!config.token) return null;
+
+  // Focus/visibility events call this often. Check the tiny sync metadata record
+  // before asking the backend for the complete bookmark list.
+  const savedState = await getBookmarkSyncState<State>();
+  const now = Date.now();
+  if (savedState?.source === 'backend-v1') {
+    if (savedState.leaseUntil > now) return null;
+    if (!force && !savedState.pending && now - savedState.lastSuccess < config.days * 86400000) {
+      return null;
+    }
+  }
+
   const backendRows = await getBookmarkArticles();
   const state = await transactBookmarkSync<State | null>((_rows, saved, _store, meta) => {
     // The previous installer used browser bookmark storage. Start the backend
     // adapter with an empty shadow so existing server bookmarks are retained.
     const s: State = saved?.source === 'backend-v1' ? saved : {
       Id: 'state', source: 'backend-v1', revision: 0, shadow: [], lastSuccess: 0, leaseUntil: 0 };
-    const now = Date.now();
-    if (s.leaseUntil > now || (!force && !s.pending && now - s.lastSuccess < config.days * 86400000)) return null;
+    const currentTime = Date.now();
+    if (s.leaseUntil > currentTime || (!force && !s.pending && currentTime - s.lastSuccess < config.days * 86400000)) return null;
     if (!s.pending) {
       const captured = ids(backendRows), current = new Set(captured), shadow = new Set(s.shadow);
       s.pending = { captured, payload: { requestId: requestId(), baseRevision: s.revision,
         add: captured.filter(id => !shadow.has(id)), remove: s.shadow.filter(id => !current.has(id)) } };
     }
-    s.leaseUntil = now + 600000;
+    s.leaseUntil = currentTime + 600000;
     s.leaseOwner = requestId();
     meta.put(s); return s;
   });
