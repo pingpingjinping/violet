@@ -30,7 +30,7 @@ services:
     command:
       - |
         slot_seconds=21600
-        retry_seconds=600
+        retry_seconds=3600
 
         next_slot_epoch() {
           now=$$(date +%s)
