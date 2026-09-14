@@ -1,24 +1,30 @@
 import i18n from './i18n/config';
 
-const syncVersionLabels: Record<string, string> = {
-  ko: '동기화 버전:',
-  en: 'Sync version:',
-  ja: '同期バージョン:',
-  zh: '同步版本:',
-  eo: 'Sinkroniga versio:',
-  it: 'Versione sincronizzazione:',
-  pt: 'Versão de sincronização:',
+const dbVersionLabels: Record<string, string> = {
+  ko: 'DB 버전:',
+  en: 'DB version:',
+  ja: 'DBバージョン:',
+  zh: 'DB 版本:',
+  eo: 'DB-versio:',
+  it: 'Versione DB:',
+  pt: 'Versão do DB:',
 };
 
-for (const [language, label] of Object.entries(syncVersionLabels)) {
+for (const [language, label] of Object.entries(dbVersionLabels)) {
   i18n.addResource(language, 'translation', 'settings.sync.lastSyncDb', label);
 }
 
-let mobileDbSyncVersion: string | null = null;
+let mobileDbVersion: string | null = null;
 let lastObservedSync = '';
 let loading = false;
 
-async function loadMobileDbSyncVersion() {
+function formatDbVersion(timestamp: string): string | null {
+  const seconds = Number(timestamp);
+  if (!Number.isFinite(seconds)) return null;
+  return new Date(seconds * 1000).toLocaleString();
+}
+
+async function loadMobileDbVersion() {
   if (loading) return;
   loading = true;
   try {
@@ -27,12 +33,12 @@ async function loadMobileDbSyncVersion() {
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const parts = (await response.text()).trim().split(/\s+/);
-    mobileDbSyncVersion = parts[0] === 'db' ? parts[1] || null : null;
+    mobileDbVersion = parts[0] === 'db' && parts[1] ? formatDbVersion(parts[1]) : null;
   } catch {
-    mobileDbSyncVersion = null;
+    mobileDbVersion = null;
   } finally {
     loading = false;
-    renderSyncVersion();
+    renderDbVersion();
   }
 }
 
@@ -45,29 +51,29 @@ function findRowByLabel(label: string): HTMLElement | null {
   return null;
 }
 
-function renderSyncVersion() {
+function renderDbVersion() {
   const versionLabel = i18n.t('settings.sync.lastSyncDb');
   const versionRow = findRowByLabel(versionLabel);
   if (!versionRow) return;
 
   const value = versionRow.lastElementChild as HTMLElement | null;
-  const nextValue = mobileDbSyncVersion || i18n.t('settings.sync.never');
+  const nextValue = mobileDbVersion || i18n.t('settings.sync.never');
   if (value && value.textContent !== nextValue) value.textContent = nextValue;
 
   const lastSyncRow = findRowByLabel(i18n.t('settings.sync.lastSync'));
   const currentLastSync = lastSyncRow?.lastElementChild?.textContent?.trim() || '';
   if (currentLastSync && currentLastSync !== lastObservedSync) {
     lastObservedSync = currentLastSync;
-    void loadMobileDbSyncVersion();
+    void loadMobileDbVersion();
   }
 }
 
-const observer = new MutationObserver(() => renderSyncVersion());
+const observer = new MutationObserver(() => renderDbVersion());
 observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
 
 i18n.on('languageChanged', () => {
   lastObservedSync = '';
-  renderSyncVersion();
+  renderDbVersion();
 });
 
-void loadMobileDbSyncVersion();
+void loadMobileDbVersion();
