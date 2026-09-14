@@ -1,5 +1,5 @@
 import { ScopedMessageSearchButton } from '../components/message-search/ScopedMessageSearchButton';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useBookmarkGroups, useBookmarkArticles } from '../hooks/useBookmarks';
@@ -59,7 +59,10 @@ export function BookmarksPage() {
     useBookmarkArticles(selectedGroupId);
 
   const allBookmarks = bookmarkArticles ?? [];
-  const articleIds = allBookmarks.map((ba) => ba.Article);
+  const articleIds = useMemo(
+    () => allBookmarks.map((ba) => ba.Article),
+    [allBookmarks],
+  );
 
   // Fetch ALL articles in bulk
   const { data: allArticles, isLoading: articlesLoading } = useAllArticles(
@@ -74,25 +77,34 @@ export function BookmarksPage() {
 
   // Filter articles based on search query
   const searchFilteredArticles = useLocalArticleSearch(allArticles ?? []);
-  const bookmarkDateByArticle = new Map(
-    allBookmarks.map((bookmark) => [bookmark.Article, bookmark.DateTime]),
+  const bookmarkDateByArticle = useMemo(
+    () => new Map(allBookmarks.map((bookmark) => [bookmark.Article, bookmark.DateTime])),
+    [allBookmarks],
   );
-  const dateDistribution = buildLocalDateDistribution(
-    searchFilteredArticles.map((article) => bookmarkDateByArticle.get(String(article.Id)) ?? ''),
+  const dateDistribution = useMemo(
+    () => buildLocalDateDistribution(
+      searchFilteredArticles.map((article) => bookmarkDateByArticle.get(String(article.Id)) ?? ''),
+    ),
+    [searchFilteredArticles, bookmarkDateByArticle],
   );
-  const filteredArticles = filterItemsByDateRange(
-    searchFilteredArticles,
-    (article) => bookmarkDateByArticle.get(String(article.Id)) ?? '',
-    from,
-    to,
+  const filteredArticles = useMemo(
+    () => filterItemsByDateRange(
+      searchFilteredArticles,
+      (article) => bookmarkDateByArticle.get(String(article.Id)) ?? '',
+      from,
+      to,
+    ),
+    [searchFilteredArticles, bookmarkDateByArticle, from, to],
   );
 
   // Paginate/slice filtered results for display
   const totalPages = Math.ceil(filteredArticles.length / PAGE_SIZE);
-  const displayArticles =
-    scrollMode === 'infinite'
+  const displayArticles = useMemo(
+    () => scrollMode === 'infinite'
       ? filteredArticles.slice(0, visibleCount)
-      : filteredArticles.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+      : filteredArticles.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+    [filteredArticles, scrollMode, visibleCount, page],
+  );
 
   const keyboardSelectedId = useResultGridKeyboard(
     displayArticles,
