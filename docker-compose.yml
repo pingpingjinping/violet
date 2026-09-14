@@ -32,23 +32,31 @@ services:
         slot_seconds=21600
         retry_seconds=3600
 
-        next_slot_epoch() {
-          now=$$(date +%s)
-          echo $$(( ((now / slot_seconds) + 1) * slot_seconds ))
+        seconds_until_next_slot() {
+          hour=$$(date +%H); hour=$${hour#0}; [ -n "$$hour" ] || hour=0
+          minute=$$(date +%M); minute=$${minute#0}; [ -n "$$minute" ] || minute=0
+          second=$$(date +%S); second=$${second#0}; [ -n "$$second" ] || second=0
+          since_midnight=$$((hour * 3600 + minute * 60 + second))
+          remainder=$$((since_midnight % slot_seconds))
+          if [ "$$remainder" -eq 0 ]; then
+            echo 0
+          else
+            echo $$((slot_seconds - remainder))
+          fi
         }
 
         while true; do
-          target=$$(next_slot_epoch)
-          wait_seconds=$$((target - $$(date +%s)))
-          echo "[fast-hsync] next scheduled sync at $$(TZ=Asia/Seoul date -d "@$$target" '+%Y-%m-%d %H:%M:%S %Z')"
+          wait_seconds=$$(seconds_until_next_slot)
+          echo "[fast-hsync] waiting $${wait_seconds}s for next KST slot (00/06/12/18)"
           sleep "$$wait_seconds"
 
           while true; do
-            echo "[fast-hsync] starting scheduled sync at $$(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M:%S %Z')"
+            echo "[fast-hsync] starting scheduled sync at $$(date '+%Y-%m-%d %H:%M:%S %Z')"
             fast-hsync /content-data/data.db
             status=$$?
             if [ "$$status" -eq 0 ]; then
               echo "[fast-hsync] scheduled sync completed"
+              sleep 1
               break
             fi
 
