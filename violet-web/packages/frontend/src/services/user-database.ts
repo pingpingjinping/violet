@@ -74,6 +74,16 @@ export async function transactBookmarkSync<T>(
   });
 }
 
+export async function getBookmarkSyncState<T>(): Promise<T | null> {
+  const db = await openUserDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(USER_STORES.bookmarkSync, 'readonly');
+    const request = tx.objectStore(USER_STORES.bookmarkSync).get('state');
+    request.onsuccess = () => resolve((request.result as T | undefined) ?? null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
 export async function getAllUserItems<T>(storeName: UserStoreName): Promise<T[]> {
   const db = await openUserDB();
 
