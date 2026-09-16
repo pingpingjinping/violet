@@ -2,7 +2,13 @@ import Database from 'better-sqlite3';
 
 /** Covers language-filtered counts and descending result pagination. */
 export function ensureLanguageSearchIndex(db: Database.Database): void {
-  db.exec('CREATE INDEX IF NOT EXISTS idx_language_exist_id ON HitomiColumnModel(Language, ExistOnHitomi, Id DESC)');
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_language_exist_id
+      ON HitomiColumnModel(Language, ExistOnHitomi, Id DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_language_exist_published
+      ON HitomiColumnModel(Language, ExistOnHitomi, Published);
+  `);
 }
 
 /**

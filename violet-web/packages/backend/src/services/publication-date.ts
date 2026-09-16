@@ -112,17 +112,49 @@ export function getDateDistribution(
   if (cached && cached.expiresAt > now) return cached.value;
   if (cached) distributionCache.delete(cacheKey);
 
-  const published = normalizedPublishedSql('Published');
-  const baseCte = `WITH matched AS (
-    SELECT ${published} AS publishedAt
+  // Read the raw publication value and normalize/group it in memory.
+  // Materializing 100k+ datetime() strings in SQLite is very expensive
+  // on low-power storage, while reading Published directly is much faster.
+  const publishedRows = db.prepare(`
+    SELECT Published
     FROM HitomiColumnModel
     WHERE ${condition}
-  )`;
-  // Aggregate once per day, then derive the same adaptive buckets in memory.
-  const days = db.prepare(`${baseCte}
-    SELECT substr(publishedAt, 1, 10) AS start, COUNT(*) AS count
-    FROM matched GROUP BY start ORDER BY start`).all() as Array<{ start: string | null; count: number }>;
-  const validDays = days.filter((row): row is { start: string; count: number } => row.start !== null);
+  `).all() as Array<{ Published: number | string | null }>;
+
+  const dayCounts = new Map<string, number>();
+  let invalidCount = 0;
+
+  for (const row of publishedRows) {
+    let start: string | null = null;
+
+    if (
+      typeof row.Published === 'number' &&
+      row.Published > DOTNET_UNIX_EPOCH_TICKS
+    ) {
+      const date = new Date(
+        (row.Published - DOTNET_UNIX_EPOCH_TICKS) / 10_000,
+      );
+      if (!Number.isNaN(date.getTime())) {
+        start = date.toISOString().slice(0, 10);
+      }
+    } else if (typeof row.Published === 'string') {
+      const date = new Date(row.Published);
+      if (!Number.isNaN(date.getTime())) {
+        start = date.toISOString().slice(0, 10);
+      }
+    }
+
+    if (!start) {
+      invalidCount++;
+      continue;
+    }
+
+    dayCounts.set(start, (dayCounts.get(start) ?? 0) + 1);
+  }
+
+  const validDays = [...dayCounts.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([start, count]) => ({ start, count }));
   const minDate = validDays[0]?.start ?? null;
   const maxDate = validDays.at(-1)?.start ?? null;
   const unit = minDate && maxDate ? selectBucketUnit(minDate, maxDate) : 'year';
@@ -149,7 +181,7 @@ export function getDateDistribution(
     minDate,
     maxDate,
     totalCount: validDays.reduce((sum, row) => sum + row.count, 0),
-    invalidCount: days.find((row) => row.start === null)?.count ?? 0,
+    invalidCount,
     unit,
     buckets,
   };
@@ -158,6 +190,6 @@ export function getDateDistribution(
     const oldestKey = distributionCache.keys().next().value as string | undefined;
     if (oldestKey) distributionCache.delete(oldestKey);
   }
-  distributionCache.set(cacheKey, { value, expiresAt: now + CACHE_TTL_MS });
+  distributionCache.set(cacheKey, { value, expiresAt: Date.now() + CACHE_TTL_MS });
   return value;
 }
