@@ -2,6 +2,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { Response } from 'express';
 import { getEhCookie } from './eh-cookie-store.js';
+import { refreshEhCookieAfterAuthFailure } from './eh-auto-login.js';
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -52,6 +53,50 @@ function imageHeaders(url: string, referer?: string): Record<string, string> {
   return headers;
 }
 
+async function fetchEhImagePage(
+  url: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const response = await fetch(url, {
+    headers: imageHeaders(url, url),
+    redirect: 'manual',
+    signal,
+  });
+  const redirected = response.status >= 300 && response.status < 400;
+  if (!response.ok || redirected) {
+    await response.body?.cancel();
+    const refreshed = await refreshEhCookieAfterAuthFailure();
+    if (!refreshed) throw new Error(`E-Hentai image page returned ${response.status}`);
+
+    const retry = await fetch(url, {
+      headers: imageHeaders(url, url),
+      redirect: 'manual',
+      signal,
+    });
+    if (!retry.ok) {
+      await retry.body?.cancel();
+      throw new Error(`E-Hentai image page returned ${retry.status} after cookie refresh`);
+    }
+    return retry.text();
+  }
+
+  const html = await response.text();
+  if (/<img\b[^>]*\bid=["']img["']/i.test(html)) return html;
+
+  const refreshed = await refreshEhCookieAfterAuthFailure();
+  if (!refreshed) return html;
+  const retry = await fetch(url, {
+    headers: imageHeaders(url, url),
+    redirect: 'manual',
+    signal,
+  });
+  if (!retry.ok) {
+    await retry.body?.cancel();
+    throw new Error(`E-Hentai image page returned ${retry.status} after cookie refresh`);
+  }
+  return retry.text();
+}
+
 export async function resolveImageSource(
   url: string,
   referer?: string,
@@ -69,16 +114,8 @@ export async function resolveImageSource(
       return { url: cached.url, headers: imageHeaders(cached.url, rewritten) };
     }
 
-    const response = await fetch(rewritten, {
-      headers: imageHeaders(rewritten, rewritten),
-      redirect: 'manual',
-      signal,
-    });
-    if (!response.ok) {
-      await response.body?.cancel();
-      throw new Error(`E-Hentai image page returned ${response.status}`);
-    }
-    const imageUrl = extractEhImageUrl(await response.text());
+    const html = await fetchEhImagePage(rewritten, signal);
+    const imageUrl = extractEhImageUrl(html);
     ehPageCache.set(rewritten, { url: imageUrl, timestamp: Date.now() });
     if (ehPageCache.size > 2000) {
       const oldest = [...ehPageCache.entries()]
@@ -92,10 +129,6 @@ export async function resolveImageSource(
   return { url: rewritten, headers: imageHeaders(rewritten, referer) };
 }
 
-/**
- * Proxy an image from a remote URL, setting appropriate headers (Referer, etc.)
- * to bypass CORS and hotlink protection.
- */
 export async function proxyImage(
   url: string,
   referer: string | undefined,
