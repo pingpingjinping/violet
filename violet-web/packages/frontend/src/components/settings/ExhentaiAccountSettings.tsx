@@ -51,7 +51,7 @@ export function ExhentaiAccountSettings() {
       const next = await saveExhentaiAccount(username, password);
       setStatus(next);
       setPassword('');
-      setMessage('로그인 성공. 쿠키를 저장했고 자동 갱신을 켰습니다.');
+      setMessage('로그인 성공. 쿠키를 저장했고 필요할 때 자동 갱신하도록 설정했습니다.');
     } catch (error: any) {
       setMessage(error?.response?.data?.error || '로그인에 실패했습니다. 서버 로그를 확인하세요.');
     } finally {
@@ -94,13 +94,13 @@ export function ExhentaiAccountSettings() {
       <h3>ExHentai 계정 자동 로그인</h3>
       <p>
         E-Hentai 아이디와 비밀번호로 로그인해 ExHentai 쿠키를 자동 저장합니다.
-        서버가 6시간마다 쿠키를 확인하고 만료되었을 때만 재로그인을 시도합니다.
+        평소에는 추가 확인 요청을 보내지 않고, 실제 ExHentai 요청에서 인증이 실패했을 때만 재로그인해 쿠키를 갱신하고 요청을 한 번 다시 시도합니다.
       </p>
 
       <div style={{ display: 'grid', gap: '0.35rem' }}>
         <div>자동 로그인: <strong>{status.configured ? '설정됨' : '설정 안 됨'}</strong></div>
         <div>ExHentai 쿠키: <strong>{status.cookieConfigured ? '있음' : '없음'}</strong></div>
-        <div>마지막 확인: {formatTime(status.lastCheckAt)}</div>
+        <div>마지막 자동 갱신 시도: {formatTime(status.lastCheckAt)}</div>
         <div>마지막 재발급: {formatTime(status.lastRefreshAt)}</div>
         {status.lastError && <div style={{ color: 'var(--color-error, #d33)' }}>최근 오류: {status.lastError}</div>}
       </div>
