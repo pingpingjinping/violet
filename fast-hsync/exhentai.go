@@ -6,6 +6,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/http/cookiejar"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -16,7 +18,6 @@ import (
 
 const (
 	defaultEHCookie     = ""
-	ehLookupPages       = 200
 	ehRequestDelay      = 1 * time.Second
 	ehLongDelay         = 120 * time.Second
 	ehLongDelayInterval = 100
@@ -52,11 +53,106 @@ func getEHHash(art *EHArticle) string {
 }
 
 // syncExHentai crawls exhentai pages (normal + expunged) and returns all articles.
-func syncExHentai(cookie string, latestID int) []*EHArticle {
+func newExHentaiClient(cookie string) (*http.Client, error) {
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	baseURL, err := url.Parse("https://exhentai.org/")
+	if err != nil {
+		return nil, err
+	}
+
+	var cookies []*http.Cookie
+	for _, part := range strings.Split(cookie, ";") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		name, value, ok := strings.Cut(part, "=")
+		if !ok || strings.TrimSpace(name) == "" {
+			continue
+		}
+		cookies = append(cookies, &http.Cookie{
+			Name:  strings.TrimSpace(name),
+			Value: strings.TrimSpace(value),
+		})
+	}
+	jar.SetCookies(baseURL, cookies)
+
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		Jar:     jar,
+	}
+
+	// Force Extended gallery view and retain the response cookies (sl/yay).
+	req, err := http.NewRequest("GET", "https://exhentai.org/?inline_set=dm_e", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("ExHentai display-mode request returned HTTP %d", resp.StatusCode)
+	}
+
+	return client, nil
+}
+
+func countExistingEHIDs(db *sql.DB, articles []*EHArticle) (int, error) {
+	ids := make([]int, 0, len(articles))
+	args := make([]interface{}, 0, len(articles))
+	placeholders := make([]string, 0, len(articles))
+
+	for _, a := range articles {
+		id := getEHID(a)
+		if id <= 0 {
+			continue
+		}
+		ids = append(ids, id)
+		args = append(args, id)
+		placeholders = append(placeholders, "?")
+	}
+
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	query := fmt.Sprintf(`
+		SELECT COUNT(*)
+		FROM HitomiColumnModel
+		WHERE Id IN (%s)
+		  AND EHash IS NOT NULL
+		  AND TRIM(EHash) <> ''
+	`, strings.Join(placeholders, ","))
+
+	var count int
+	if err := db.QueryRow(query, args...).Scan(&count); err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
+func syncExHentai(cookie string, db *sql.DB) []*EHArticle {
 	log.Println("Starting ExHentai sync...")
 
-	articles := crawlExHentai(cookie, latestID, false)
-	articles = append(articles, crawlExHentai(cookie, latestID, true)...)
+	client, err := newExHentaiClient(cookie)
+	if err != nil {
+		log.Printf("Failed to initialize ExHentai session: %v", err)
+		return nil
+	}
+
+	articles := crawlExHentai(client, db)
 
 	// Deduplicate by URL
 	seen := make(map[string]bool)
@@ -72,37 +168,28 @@ func syncExHentai(cookie string, latestID int) []*EHArticle {
 	return deduped
 }
 
-func crawlExHentai(cookie string, latestID int, includeExpunged bool) []*EHArticle {
+func crawlExHentai(client *http.Client, db *sql.DB) []*EHArticle {
 	var articles []*EHArticle
 	next := 0
-
-	label := "exhentai"
-	if includeExpunged {
-		label = "exhentai-expunged"
-	}
-
-	client := &http.Client{Timeout: 30 * time.Second}
+	consecutiveKnownPages := 0
 
 	for page := 0; ; page++ {
-		var url string
-		if includeExpunged {
-			url = fmt.Sprintf("https://exhentai.org/?next=%d&f_doujinshi=on&f_manga=on&f_artistcg=on&f_gamecg=on&f_cats=0&f_sname=on&f_stags=on&f_sh=on&advsearch=1&f_sname=on&f_stags=on&f_sdesc=on&f_sh=on", next)
-		} else {
-			url = fmt.Sprintf("https://exhentai.org/?next=%d&f_doujinshi=on&f_manga=on&f_artistcg=on&f_gamecg=on&f_cats=0&f_sname=on&f_stags=on&advsearch=1&f_sname=on&f_stags=on&f_sdesc=on", next)
-		}
+		url := fmt.Sprintf(
+			"https://exhentai.org/?next=%d&f_doujinshi=on&f_manga=on&f_artistcg=on&f_gamecg=on&f_cats=0&f_sname=on&f_stags=on&advsearch=1&f_sname=on&f_stags=on&f_sdesc=on",
+			next,
+		)
 
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
-			log.Printf("[%s] page %d: request error: %v", label, page, err)
+			log.Printf("[exhentai] page %d: request error: %v", page, err)
 			break
 		}
-		req.Header.Set("Cookie", cookie)
 		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 
 		resp, err := client.Do(req)
 		if err != nil {
-			log.Printf("[%s] page %d: fetch error: %v", label, page, err)
+			log.Printf("[exhentai] page %d: fetch error: %v", page, err)
 			time.Sleep(ehRequestDelay)
 			continue
 		}
@@ -110,42 +197,55 @@ func crawlExHentai(cookie string, latestID int, includeExpunged bool) []*EHArtic
 		body, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if err != nil {
-			log.Printf("[%s] page %d: read error: %v", label, page, err)
+			log.Printf("[exhentai] page %d: read error: %v", page, err)
 			continue
 		}
 
 		parsed := parseExHentaiExtendedList(string(body))
 		if len(parsed) == 0 {
-			log.Printf("[%s] page %d: no results, stopping", label, page)
+			log.Printf("[exhentai] page %d: no results, stopping", page)
 			break
 		}
 
 		articles = append(articles, parsed...)
 
 		if len(parsed) != 25 {
-			log.Printf("[%s] page %d: got %d (expected 25)", label, page, len(parsed))
+			log.Printf("[exhentai] page %d: got %d (expected 25)", page, len(parsed))
 		}
 
-		// Find min ID for stop condition
-		minID := 0
-		for _, a := range parsed {
-			if id := getEHID(a); minID == 0 || (id > 0 && id < minID) {
-				minID = id
-			}
-		}
-
-		next = getEHID(parsed[len(parsed)-1])
-		log.Printf("[%s] page %d, total: %d, next: %d", label, page, len(articles), next)
-
-		if page > ehLookupPages && minID > 0 && minID < latestID {
-			log.Printf("[%s] reached latestID boundary, stopping", label)
+		knownCount, err := countExistingEHIDs(db, parsed)
+		if err != nil {
+			log.Printf("[exhentai] page %d: existing-ID check error: %v", page, err)
 			break
 		}
 
-		// Rate limiting
+		if knownCount == len(parsed) {
+			consecutiveKnownPages++
+		} else {
+			consecutiveKnownPages = 0
+		}
+
+		next = getEHID(parsed[len(parsed)-1])
+
+		log.Printf(
+			"[exhentai] page %d, total: %d, next: %d, existing: %d/%d, overlap: %d/2",
+			page,
+			len(articles),
+			next,
+			knownCount,
+			len(parsed),
+			consecutiveKnownPages,
+		)
+
+		if consecutiveKnownPages >= 2 {
+			log.Printf("[exhentai] 2 consecutive fully-existing pages reached, stopping")
+			break
+		}
+
 		time.Sleep(ehRequestDelay)
+
 		if (page+1)%ehLongDelayInterval == 0 {
-			log.Printf("[%s] rate limit pause (120s)...", label)
+			log.Printf("[exhentai] rate limit pause (120s)...")
 			time.Sleep(ehLongDelay)
 		}
 	}
@@ -376,7 +476,7 @@ func getEHCookie() string {
 //   - EH only → create new model (ExistOnHitomi=0)
 func mergeExHentai(db *sql.DB, latestID int, models []*HitomiColumnModel, ids []int) ([]*HitomiColumnModel, []int) {
 	cookie := getEHCookie()
-	ehArticles := syncExHentai(cookie, latestID)
+	ehArticles := syncExHentai(cookie, db)
 
 	ehByID := make(map[int]*EHArticle, len(ehArticles))
 	for _, a := range ehArticles {

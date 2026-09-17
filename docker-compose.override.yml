@@ -1,0 +1,84 @@
+services:
+  hsync:
+    environment:
+      TZ: KST-9
+    command:
+      - |
+        task_state_dir=/content-data
+        task_request="$$task_state_dir/.violet-hsync-request"
+        task_state="$$task_state_dir/.violet-hsync-state"
+        task_started="$$task_state_dir/.violet-hsync-started-at"
+        task_completed="$$task_state_dir/.violet-hsync-completed-at"
+        task_error="$$task_state_dir/.violet-hsync-error"
+        task_snapshot_request="$$task_state_dir/.violet-snapshot-request"
+
+        last_slot=""
+
+        run_sync() {
+          sync_reason="$$1"
+
+          rm -f "$$task_request"
+          date +%Y-%m-%dT%H:%M:%S%z > "$$task_started"
+          printf '%s\n' running > "$$task_state"
+          rm -f "$$task_error"
+
+          echo "[fast-hsync] starting $$sync_reason sync"
+
+          if [ -s /web-data/exhentai-cookie.txt ]; then
+            echo "[fast-hsync] ExHentai cookie found; ExHentai sync enabled"
+            COOKIE="$$(cat /web-data/exhentai-cookie.txt)" \
+              fast-hsync /content-data/data.db --with-exh
+          else
+            echo "[fast-hsync] ExHentai cookie not found; Hitomi-only sync"
+            fast-hsync /content-data/data.db
+          fi
+          task_status=$$?
+
+          if [ "$$task_status" -eq 0 ]; then
+            date +%Y-%m-%dT%H:%M:%S%z > "$$task_completed"
+            printf '%s\n' success > "$$task_state"
+            : > "$$task_snapshot_request"
+            echo "[fast-hsync] $$sync_reason sync completed"
+            return 0
+          else
+            printf '%s\n' "$$task_status" > "$$task_error"
+            printf '%s\n' error > "$$task_state"
+            echo "[fast-hsync] $$sync_reason sync failed with exit code $$task_status" >&2
+            return "$$task_status"
+          fi
+        }
+
+        echo "[fast-hsync] scheduler active: KST 00/06/12/18"
+
+        while true; do
+          now_epoch=$$(date +%s)
+          hour=$$(date +%H)
+          minute=$$(date +%M)
+          slot_key=$$(date '+%Y-%m-%d-%H')
+
+          if [ -f "$$task_request" ]; then
+            run_sync manual || true
+          else
+            scheduled_due=0
+
+            if [ "$$minute" = "00" ] && [ "$$slot_key" != "$$last_slot" ]; then
+              case "$$hour" in
+                00|06|12|18) scheduled_due=1 ;;
+              esac
+            fi
+
+            if [ "$$scheduled_due" -eq 1 ]; then
+              last_slot="$$slot_key"
+              run_sync scheduled || true
+            fi
+          fi
+
+          sleep 5
+        done
+
+    volumes:
+      - ./violet-web/packages/backend/data:/web-data:ro
+
+  web:
+    environment:
+      HOST_SYNC_DIR: /content-data
