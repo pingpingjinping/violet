@@ -10,6 +10,7 @@
 import type { ImageList } from '@violet-web/shared';
 import { getContentDb } from './content-db.js';
 import { getEhCookie } from './eh-cookie-store.js';
+import { refreshEhCookieAfterAuthFailure } from './eh-auto-login.js';
 
 const BASE_DOMAIN = 'gold-usergeneratedcontent.net';
 const GG_JS_URL = `https://ltn.${BASE_DOMAIN}/gg.js`;
@@ -48,6 +49,8 @@ class UpstreamHttpError extends Error {
   }
 }
 
+class EhAuthenticationError extends Error {}
+
 let routingCache: GgRouting | null = null;
 let latestUpdate = 0;
 let routingRefresh: Promise<void> | null = null;
@@ -60,7 +63,6 @@ async function fetchText(url: string, headers?: Record<string, string>): Promise
   if (!res.ok) throw new UpstreamHttpError(url, res.status);
   return res.text();
 }
-
 
 function getEhMetadata(id: number): EhGalleryMetadata | null {
   const row = getContentDb()
@@ -108,7 +110,7 @@ function extractEhThumbnails(html: string): string[] {
   return result;
 }
 
-async function fetchEhGalleryPage(url: string, cookie: string | null): Promise<string> {
+async function fetchEhGalleryPageOnce(url: string, cookie: string | null): Promise<string> {
   const headers: Record<string, string> = {
     'User-Agent': USER_AGENT,
     Accept: 'text/html,application/xhtml+xml',
@@ -121,17 +123,30 @@ async function fetchEhGalleryPage(url: string, cookie: string | null): Promise<s
     redirect: 'manual',
     signal: AbortSignal.timeout(EH_REQUEST_TIMEOUT_MS),
   });
+  if (response.status === 301 || response.status === 302 || response.status === 303 || response.status === 307 || response.status === 308) {
+    throw new EhAuthenticationError(`E-Hentai redirected while loading ${url}`);
+  }
   if (!response.ok) throw new UpstreamHttpError(url, response.status);
   const html = await response.text();
   if (!html.includes('id="gdt"') && !html.includes("id='gdt'")) {
-    throw new Error(`E-Hentai gallery unavailable or authentication required: ${url}`);
+    throw new EhAuthenticationError(`E-Hentai gallery unavailable or authentication required: ${url}`);
   }
   return html;
 }
 
+async function fetchEhGalleryPage(url: string): Promise<string> {
+  try {
+    return await fetchEhGalleryPageOnce(url, getEhCookie());
+  } catch (error) {
+    if (!(error instanceof EhAuthenticationError)) throw error;
+    const refreshed = await refreshEhCookieAfterAuthFailure();
+    if (!refreshed) throw error;
+    return fetchEhGalleryPageOnce(url, getEhCookie());
+  }
+}
+
 async function resolveEhGallery(id: number, metadata: EhGalleryMetadata): Promise<ImageList> {
-  const cookie = getEhCookie();
-  const candidates = cookie
+  const candidates = getEhCookie()
     ? ['https://exhentai.org', 'https://e-hentai.org']
     : ['https://e-hentai.org'];
   let lastError: unknown;
@@ -145,7 +160,7 @@ async function resolveEhGallery(id: number, metadata: EhGalleryMetadata): Promis
 
       for (let page = 0; page < maxPages; page++) {
         const url = `${origin}/g/${id}/${metadata.ehash}/?p=${page}&inline_set=ts_m`;
-        const html = await fetchEhGalleryPage(url, cookie);
+        const html = await fetchEhGalleryPage(url);
         const pageLinks = extractEhImagePages(html, id, origin);
         if (pageLinks.length === 0) break;
 
@@ -198,10 +213,7 @@ async function tryRefreshV4(): Promise<boolean> {
 }
 
 async function ensureScript(): Promise<void> {
-  // Refresh if cache is empty or older than 30 minutes
-  if (routingCache && Date.now() - latestUpdate < 30 * 60 * 1000) {
-    return;
-  }
+  if (routingCache && Date.now() - latestUpdate < 30 * 60 * 1000) return;
 
   if (!routingRefresh) {
     routingRefresh = (async () => {
@@ -327,9 +339,6 @@ async function resolveGalleryUncached(
   }
 }
 
-/**
- * Get headers required for fetching images from a gallery.
- */
 export async function getGalleryHeaders(
   _id: string,
 ): Promise<Record<string, string>> {
