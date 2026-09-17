@@ -1,14 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getEhCookie, getEhCookieStatus, saveEhCookie } from './eh-cookie-store.js';
+import { getEhCookieStatus, saveEhCookie } from './eh-cookie-store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 const LOGIN_URL = 'https://forums.e-hentai.org/index.php?act=Login&CODE=01';
-const AUTO_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
-const STARTUP_CHECK_DELAY_MS = 30 * 1000;
 const REQUEST_TIMEOUT_MS = 20 * 1000;
 
 interface EhCredentials {
@@ -33,7 +31,6 @@ const runtimeState: Omit<EhAutoLoginStatus, 'configured' | 'cookieConfigured'> =
 };
 
 let refreshPromise: Promise<EhAutoLoginStatus> | null = null;
-let schedulerStarted = false;
 
 function getCredentialsPath(): string {
   if (process.env.EXHENTAI_ACCOUNT_PATH) {
@@ -126,17 +123,6 @@ function serializeJar(jar: Map<string, string>): string {
   return [...ordered].map((name) => `${name}=${jar.get(name)}`).join('; ');
 }
 
-function loadJarFromCookie(cookie: string | null): Map<string, string> {
-  const jar = new Map<string, string>();
-  if (!cookie) return jar;
-  for (const part of cookie.split(';')) {
-    const separator = part.indexOf('=');
-    if (separator <= 0) continue;
-    jar.set(part.slice(0, separator).trim(), part.slice(separator + 1).trim());
-  }
-  return jar;
-}
-
 function isCloudflareChallenge(status: number, body: string): boolean {
   const lower = body.toLowerCase();
   return status === 403 && (
@@ -198,13 +184,14 @@ async function loginForCookie(credentials: EhCredentials): Promise<string> {
     throw new Error(`E-Hentai login returned HTTP ${login.response.status}`);
   }
 
-  const propagationUrls = [
+  for (const url of [
     'https://e-hentai.org/',
     'https://exhentai.org/',
     'https://exhentai.org/uconfig.php',
     'https://exhentai.org/',
-  ];
-  for (const url of propagationUrls) await fetchWithJar(url, jar);
+  ]) {
+    await fetchWithJar(url, jar);
+  }
 
   if (!validIgneous(jar.get('igneous'))) {
     await new Promise((resolve) => setTimeout(resolve, 1200));
@@ -223,21 +210,6 @@ async function loginForCookie(credentials: EhCredentials): Promise<string> {
   }
 
   return serializeJar(jar);
-}
-
-export async function isCurrentEhCookieValid(): Promise<boolean> {
-  const cookie = getEhCookie();
-  if (!cookie) return false;
-  const jar = loadJarFromCookie(cookie);
-  if (!validIgneous(jar.get('igneous'))) return false;
-
-  const { response, body } = await fetchWithJar('https://exhentai.org/', jar);
-  if (response.status !== 200) return false;
-  const contentType = response.headers.get('content-type') ?? '';
-  if (!contentType.includes('text/html')) return false;
-  const lower = body.toLowerCase();
-  return lower.includes('exhentai.org')
-    && (lower.includes('class="itg') || lower.includes('id="searchbox') || lower.includes('favorites.php'));
 }
 
 async function doRefresh(credentials: EhCredentials, persistCredentials: boolean): Promise<EhAutoLoginStatus> {
@@ -278,35 +250,24 @@ export async function refreshEhCookieNow(): Promise<EhAutoLoginStatus> {
   return refreshPromise;
 }
 
+export async function refreshEhCookieAfterAuthFailure(): Promise<boolean> {
+  const credentials = readCredentials();
+  runtimeState.lastCheckAt = new Date().toISOString();
+  if (!credentials) return false;
+  try {
+    await refreshEhCookieNow();
+    return true;
+  } catch (error) {
+    runtimeState.lastError = error instanceof Error ? error.message : 'Automatic cookie refresh failed';
+    console.warn(`[exhentai-auto-login] ${runtimeState.lastError}`);
+    return false;
+  }
+}
+
 export function getEhAutoLoginStatus(): EhAutoLoginStatus {
   return {
     configured: readCredentials() !== null,
     cookieConfigured: getEhCookieStatus().configured,
     ...runtimeState,
   };
-}
-
-async function scheduledCheck(): Promise<void> {
-  const credentials = readCredentials();
-  if (!credentials || runtimeState.refreshing) return;
-  runtimeState.lastCheckAt = new Date().toISOString();
-  try {
-    if (await isCurrentEhCookieValid()) {
-      runtimeState.lastError = null;
-      return;
-    }
-    await refreshEhCookieNow();
-  } catch (error) {
-    runtimeState.lastError = error instanceof Error ? error.message : 'Automatic cookie check failed';
-    console.warn(`[exhentai-auto-login] ${runtimeState.lastError}`);
-  }
-}
-
-export function startEhAutoLoginScheduler(): void {
-  if (schedulerStarted) return;
-  schedulerStarted = true;
-  const startup = setTimeout(() => void scheduledCheck(), STARTUP_CHECK_DELAY_MS);
-  startup.unref?.();
-  const interval = setInterval(() => void scheduledCheck(), AUTO_CHECK_INTERVAL_MS);
-  interval.unref?.();
 }
