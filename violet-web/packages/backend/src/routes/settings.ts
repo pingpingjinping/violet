@@ -9,12 +9,9 @@ import {
   configureEhAutoLogin,
   getEhAutoLoginStatus,
   refreshEhCookieNow,
-  startEhAutoLoginScheduler,
 } from '../services/eh-auto-login.js';
 
 export const settingsRouter = Router();
-
-startEhAutoLoginScheduler();
 
 settingsRouter.get('/exhentai-cookie', (_req, res) => {
   try {
