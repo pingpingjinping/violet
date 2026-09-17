@@ -16,11 +16,13 @@ import { summaryRouter } from './routes/summary.js';
 import { activityRouter } from './routes/activity.js';
 import { intensityRouter } from './routes/intensity.js';
 import { settingsRouter } from './routes/settings.js';
+import { startEhCookieRefreshScheduler } from './services/eh-cookie-refresh.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/request-logger.js';
 
 export function createApp() {
   const app = express();
+  startEhCookieRefreshScheduler();
 
   app.use(cors());
   app.use('/api/message-search/scoped', express.json({ limit: '1mb' }));
