@@ -249,6 +249,7 @@ async function doRefresh(credentials: EhCredentials, persistCredentials: boolean
     saveEhCookie(cookie);
     if (persistCredentials) writeCredentials(credentials);
     runtimeState.lastRefreshAt = new Date().toISOString();
+    runtimeState.refreshing = false;
     return getEhAutoLoginStatus();
   } catch (error) {
     runtimeState.lastError = error instanceof Error ? error.message : 'Unknown login error';
