@@ -57,6 +57,8 @@ export function ExhentaiAccountSettings() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
+  const [autoLoginOpen, setAutoLoginOpen] = useState(false);
+  const [manualCookieOpen, setManualCookieOpen] = useState(false);
 
   useEffect(() => {
     void getExhentaiAccountStatus()
@@ -78,6 +80,27 @@ export function ExhentaiAccountSettings() {
       host.remove();
     };
   }, []);
+
+  useEffect(() => {
+    if (!portalHost) return;
+
+    const manualNodes: HTMLElement[] = [];
+    let node = portalHost.nextElementSibling as HTMLElement | null;
+    while (node) {
+      manualNodes.push(node);
+      node = node.nextElementSibling as HTMLElement | null;
+    }
+
+    for (const manualNode of manualNodes) {
+      manualNode.style.display = manualCookieOpen ? '' : 'none';
+    }
+
+    return () => {
+      for (const manualNode of manualNodes) {
+        manualNode.style.display = '';
+      }
+    };
+  }, [portalHost, manualCookieOpen]);
 
   const save = async () => {
     setBusy(true);
@@ -126,105 +149,139 @@ export function ExhentaiAccountSettings() {
 
   if (!portalHost) return null;
 
+  const toggleButtonStyle = {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 'var(--spacing-sm)',
+    padding: 0,
+    border: 0,
+    background: 'transparent',
+    color: 'inherit',
+    cursor: 'pointer',
+    textAlign: 'left' as const,
+  };
+
   return createPortal(
     <>
       <div style={{ borderTop: '1px solid var(--color-border, #e5e7eb)', margin: 'var(--spacing-md) 0', paddingTop: 'var(--spacing-md)' }}>
-        <h4 style={{ margin: '0 0 var(--spacing-xs)', fontSize: '0.95rem' }}>계정 자동 로그인</h4>
-        <p className={styles.themeDesc}>
-          E-Hentai 계정으로 로그인해 ExHentai 쿠키를 자동 저장합니다. 평소에는 추가 확인 요청을 보내지 않고,
-          실제 ExHentai 요청에서 인증이 실패했을 때만 재로그인해 쿠키를 갱신한 뒤 요청을 한 번 다시 시도합니다.
-        </p>
+        <button
+          type="button"
+          style={toggleButtonStyle}
+          aria-expanded={autoLoginOpen}
+          onClick={() => setAutoLoginOpen((open) => !open)}
+        >
+          <h4 style={{ margin: 0, fontSize: '0.95rem' }}>계정 자동 로그인</h4>
+          <span aria-hidden="true">{autoLoginOpen ? '▲' : '▼'}</span>
+        </button>
 
-        <div className={styles.syncInfo}>
-          <div className={styles.infoRow}>
-            <span className={styles.label}>자동 로그인</span>
-            <span className={status.configured ? styles.statusOk : styles.statusError}>
-              {status.configured ? '설정됨' : '설정 안 됨'}
-            </span>
-          </div>
-          <div className={styles.infoRow}>
-            <span className={styles.label}>마지막 자동 갱신 시도</span>
-            <span>{formatTime(status.lastCheckAt)}</span>
-          </div>
-          <div className={styles.infoRow}>
-            <span className={styles.label}>마지막 재발급</span>
-            <span>{formatTime(status.lastRefreshAt)}</span>
-          </div>
-          {status.lastError && (
-            <div className={styles.error}>최근 오류: {status.lastError}</div>
-          )}
-        </div>
+        {autoLoginOpen && (
+          <div style={{ marginTop: 'var(--spacing-sm)' }}>
+            <p className={styles.themeDesc}>
+              E-Hentai 계정으로 로그인해 ExHentai 쿠키를 자동 저장합니다. 평소에는 추가 확인 요청을 보내지 않고,
+              실제 ExHentai 요청에서 인증이 실패했을 때만 재로그인해 쿠키를 갱신한 뒤 요청을 한 번 다시 시도합니다.
+            </p>
 
-        <div className={styles.settingGroup}>
-          <label className={styles.settingLabel}>E-Hentai 아이디</label>
-          <input
-            type="text"
-            autoComplete="username"
-            className={styles.tagInput}
-            value={username}
-            disabled={busy}
-            onChange={(event) => setUsername(event.target.value)}
-          />
-        </div>
+            <div className={styles.syncInfo}>
+              <div className={styles.infoRow}>
+                <span className={styles.label}>자동 로그인</span>
+                <span className={status.configured ? styles.statusOk : styles.statusError}>
+                  {status.configured ? '설정됨' : '설정 안 됨'}
+                </span>
+              </div>
+              <div className={styles.infoRow}>
+                <span className={styles.label}>마지막 자동 갱신 시도</span>
+                <span>{formatTime(status.lastCheckAt)}</span>
+              </div>
+              <div className={styles.infoRow}>
+                <span className={styles.label}>마지막 재발급</span>
+                <span>{formatTime(status.lastRefreshAt)}</span>
+              </div>
+            </div>
 
-        <div className={styles.settingGroup}>
-          <label className={styles.settingLabel}>비밀번호</label>
-          <input
-            type="password"
-            autoComplete="current-password"
-            className={styles.tagInput}
-            value={password}
-            disabled={busy}
-            onChange={(event) => setPassword(event.target.value)}
-          />
-        </div>
+            <div className={styles.settingGroup}>
+              <label className={styles.settingLabel}>E-Hentai 아이디</label>
+              <input
+                type="text"
+                autoComplete="username"
+                className={styles.tagInput}
+                value={username}
+                disabled={busy}
+                onChange={(event) => setUsername(event.target.value)}
+              />
+            </div>
 
-        <div className={styles.syncButtons}>
-          <button
-            className={styles.syncBtn}
-            disabled={busy || !username.trim() || !password}
-            onClick={save}
-          >
-            {busy ? '처리 중...' : '로그인하고 자동 갱신 켜기'}
-          </button>
-          <button
-            className={styles.fullSyncBtn}
-            disabled={busy || !status.configured}
-            onClick={refresh}
-          >
-            지금 쿠키 갱신
-          </button>
-        </div>
+            <div className={styles.settingGroup}>
+              <label className={styles.settingLabel}>비밀번호</label>
+              <input
+                type="password"
+                autoComplete="current-password"
+                className={styles.tagInput}
+                value={password}
+                disabled={busy}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </div>
 
-        <div className={styles.syncButtons} style={{ marginTop: 'var(--spacing-sm)' }}>
-          <button
-            className={styles.fullSyncBtn}
-            disabled={busy || !status.configured}
-            onClick={remove}
-          >
-            자동 로그인 정보 삭제
-          </button>
-        </div>
+            <div className={styles.syncButtons}>
+              <button
+                className={styles.syncBtn}
+                disabled={busy || !username.trim() || !password}
+                onClick={save}
+              >
+                {busy ? '처리 중...' : '로그인하고 자동 갱신 켜기'}
+              </button>
+              <button
+                className={styles.fullSyncBtn}
+                disabled={busy || !status.configured}
+                onClick={refresh}
+              >
+                지금 쿠키 갱신
+              </button>
+            </div>
 
-        {message && (
-          <div className={styles.statusMessage} role="status">
-            <span className={message.includes('실패') || message.includes('못했습니다') ? styles.statusError : styles.statusDetail}>
-              {message}
-            </span>
+            <div className={styles.syncButtons} style={{ marginTop: 'var(--spacing-sm)' }}>
+              <button
+                className={styles.fullSyncBtn}
+                disabled={busy || !status.configured}
+                onClick={remove}
+              >
+                자동 로그인 정보 삭제
+              </button>
+            </div>
+
+            {message && (
+              <div className={styles.statusMessage} role="status">
+                <span className={message.includes('실패') || message.includes('못했습니다') ? styles.statusError : styles.statusDetail}>
+                  {message}
+                </span>
+              </div>
+            )}
+
+            <p className={styles.themeDesc} style={{ marginTop: 'var(--spacing-md)' }}>
+              계정 정보는 Pi 서버 파일에 권한 0600으로 저장되며 화면/API로 다시 표시되지 않습니다.
+              자동 로그인에 실패해도 기존 쿠키는 삭제하지 않습니다. Cloudflare 확인 화면이 뜨는 경우에는 아래 수동 쿠키 입력을 계속 사용할 수 있습니다.
+            </p>
           </div>
         )}
-
-        <p className={styles.themeDesc} style={{ marginTop: 'var(--spacing-md)' }}>
-          계정 정보는 Pi 서버 파일에 권한 0600으로 저장되며 화면/API로 다시 표시되지 않습니다.
-          자동 로그인에 실패해도 기존 쿠키는 삭제하지 않습니다. Cloudflare 확인 화면이 뜨는 경우에는 아래 수동 쿠키 입력을 계속 사용할 수 있습니다.
-        </p>
       </div>
 
       <div style={{ borderTop: '1px solid var(--color-border, #e5e7eb)', margin: 'var(--spacing-md) 0', paddingTop: 'var(--spacing-md)' }}>
-        <h4 style={{ margin: '0 0 var(--spacing-xs)', fontSize: '0.95rem' }}>수동 쿠키</h4>
-        <p className={styles.themeDesc}>
-          자동 로그인이 동작하지 않을 때 ipb_member_id, ipb_pass_hash, igneous 값을 직접 저장할 수 있습니다.
-        </p>
+        <button
+          type="button"
+          style={toggleButtonStyle}
+          aria-expanded={manualCookieOpen}
+          onClick={() => setManualCookieOpen((open) => !open)}
+        >
+          <h4 style={{ margin: 0, fontSize: '0.95rem' }}>수동 쿠키</h4>
+          <span aria-hidden="true">{manualCookieOpen ? '▲' : '▼'}</span>
+        </button>
+        {manualCookieOpen && (
+          <p className={styles.themeDesc} style={{ marginTop: 'var(--spacing-sm)' }}>
+            자동 로그인이 동작하지 않을 때 ipb_member_id, ipb_pass_hash, igneous 값을 직접 저장할 수 있습니다.
+          </p>
+        )}
       </div>
     </>,
     portalHost,
