@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	defaultEHCookie     = "ipb_member_id=2742770; ipb_pass_hash=622fcc2be82c922135bb0516e0ee497d; sk=t8inbzaqn45ttyn9f78eanzuqizh; igneous=tzcmxvx0yhrlli1q7; sl=dm_2"
+	defaultEHCookie     = ""
 	ehLookupPages       = 200
-	ehRequestDelay      = 100 * time.Millisecond
+	ehRequestDelay      = 1 * time.Second
 	ehLongDelay         = 120 * time.Second
 	ehLongDelayInterval = 100
 )
