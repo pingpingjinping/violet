@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	defaultEHCookie     = "ipb_member_id=2742770; ipb_pass_hash=622fcc2be82c922135bb0516e0ee497d; sk=t8inbzaqn45ttyn9f78eanzuqizh; igneous=tzcmxvx0yhrlli1q7; sl=dm_2"
+	defaultEHCookie     = ""
 	ehLookupPages       = 200
-	ehRequestDelay      = 100 * time.Millisecond
+	ehRequestDelay      = 1 * time.Second
 	ehLongDelay         = 120 * time.Second
 	ehLongDelayInterval = 100
 )
@@ -58,7 +58,6 @@ func syncExHentai(cookie string, latestID int) []*EHArticle {
 	articles := crawlExHentai(cookie, latestID, false)
 	articles = append(articles, crawlExHentai(cookie, latestID, true)...)
 
-	// Deduplicate by URL
 	seen := make(map[string]bool)
 	deduped := make([]*EHArticle, 0, len(articles))
 	for _, a := range articles {
@@ -126,7 +125,6 @@ func crawlExHentai(cookie string, latestID int, includeExpunged bool) []*EHArtic
 			log.Printf("[%s] page %d: got %d (expected 25)", label, page, len(parsed))
 		}
 
-		// Find min ID for stop condition
 		minID := 0
 		for _, a := range parsed {
 			if id := getEHID(a); minID == 0 || (id > 0 && id < minID) {
@@ -142,7 +140,6 @@ func crawlExHentai(cookie string, latestID int, includeExpunged bool) []*EHArtic
 			break
 		}
 
-		// Rate limiting
 		time.Sleep(ehRequestDelay)
 		if (page+1)%ehLongDelayInterval == 0 {
 			log.Printf("[%s] rate limit pause (120s)...", label)
@@ -170,7 +167,6 @@ func parseExHentaiExtendedList(html string) []*EHArticle {
 
 		art := &EHArticle{Descripts: make(map[string][]string)}
 
-		// URL and thumbnail from first link/image
 		if a := row.Find("a").First(); a.Length() > 0 {
 			art.URL, _ = a.Attr("href")
 		}
@@ -181,7 +177,6 @@ func parseExHentaiExtendedList(html string) []*EHArticle {
 			art.Thumbnail, _ = img.Attr("src")
 		}
 
-		// Second td > div > div = metadata section
 		secondTd := tds.Eq(1)
 		outerDiv := secondTd.Children().Filter("div").First()
 		metaDiv := outerDiv.Children().Filter("div").First()
@@ -194,13 +189,11 @@ func parseExHentaiExtendedList(html string) []*EHArticle {
 			art.Files = strings.TrimSpace(metaDivs.Eq(4).Text())
 		}
 
-		// Second td > div > a > div = content section
 		contentDiv := outerDiv.Find("a > div").First()
 		if contentDiv.Length() > 0 {
 			art.Title = strings.TrimSpace(contentDiv.Children().Filter("div").First().Text())
 		}
 
-		// Tags from table rows inside content
 		contentDiv.Find("tr").Each(func(_ int, tr *goquery.Selection) {
 			tagTds := tr.Children().Filter("td")
 			if tagTds.Length() < 2 {
@@ -231,7 +224,6 @@ func parseExHentaiExtendedList(html string) []*EHArticle {
 	return articles
 }
 
-// ehArticleToColumnModel converts an ExHentai-only article to a HitomiColumnModel.
 func ehArticleToColumnModel(art *EHArticle) *HitomiColumnModel {
 	m := &HitomiColumnModel{
 		ID:            getEHID(art),
@@ -243,13 +235,11 @@ func ehArticleToColumnModel(art *EHArticle) *HitomiColumnModel {
 		Thumbnail:     art.Thumbnail,
 	}
 
-	// Files: "25 pages" → 25
 	if art.Files != "" {
 		parts := strings.SplitN(art.Files, " ", 2)
 		m.Files, _ = strconv.Atoi(parts[0])
 	}
 
-	// Published
 	if art.Published != "" {
 		for _, layout := range []string{"2006-01-02 15:04", "2006-01-02 15:04:05"} {
 			if t, err := time.Parse(layout, strings.TrimSpace(art.Published)); err == nil {
@@ -259,36 +249,30 @@ func ehArticleToColumnModel(art *EHArticle) *HitomiColumnModel {
 		}
 	}
 
-	// Class from title: "(C99) Title" → "C99"
 	if strings.HasPrefix(art.Title, "(") {
 		if idx := strings.Index(art.Title, ")"); idx > 1 {
 			m.Class = art.Title[1:idx]
 		}
 	}
 
-	// Artists
 	if artists, ok := art.Descripts["artist"]; ok && len(artists) > 0 && artists[0] != "" {
 		m.Artists = "|" + strings.Join(artists, "|") + "|"
 	} else {
 		m.Artists = "|N/A|"
 	}
 
-	// Groups
 	if groups, ok := art.Descripts["group"]; ok && len(groups) > 0 && groups[0] != "" {
 		m.Groups = "|" + strings.Join(groups, "|") + "|"
 	}
 
-	// Characters
 	if chars, ok := art.Descripts["character"]; ok && len(chars) > 0 && chars[0] != "" {
 		m.Characters = "|" + strings.Join(chars, "|") + "|"
 	}
 
-	// Series (parody)
 	if parody, ok := art.Descripts["parody"]; ok && len(parody) > 0 && parody[0] != "" {
 		m.Series = "|" + strings.Join(parody, "|") + "|"
 	}
 
-	// Language: pick first non-"translated" language
 	m.Language = "n/a"
 	if langs, ok := art.Descripts["language"]; ok {
 		for _, l := range langs {
@@ -299,7 +283,6 @@ func ehArticleToColumnModel(art *EHArticle) *HitomiColumnModel {
 		}
 	}
 
-	// Tags: female→female:, male→male:, misc/other/mixed→plain
 	var tags []string
 	for _, category := range []string{"female", "male", "misc", "other", "mixed"} {
 		if catTags, ok := art.Descripts[category]; ok {
@@ -333,7 +316,6 @@ func normalizeEHTag(tag, category string) string {
 	}
 }
 
-// mergeEHIntoModel supplements a Hitomi-sourced model with ExHentai data.
 func mergeEHIntoModel(model *HitomiColumnModel, eh *EHArticle) {
 	model.EHash = getEHHash(eh)
 	model.Uploader = eh.Uploader
@@ -361,7 +343,6 @@ func mergeEHIntoModel(model *HitomiColumnModel, eh *EHArticle) {
 	}
 }
 
-// getEHCookie returns the ExHentai cookie from env var or default.
 func getEHCookie() string {
 	if cookie := os.Getenv("COOKIE"); cookie != "" {
 		return cookie
@@ -369,11 +350,6 @@ func getEHCookie() string {
 	return defaultEHCookie
 }
 
-// mergeExHentai runs ExHentai sync and merges results into the model list.
-// Three cases:
-//   - Hitomi model exists in current batch + EH → supplement hitomi model
-//   - Hitomi model exists in DB only + EH → read DB record, supplement
-//   - EH only → create new model (ExistOnHitomi=0)
 func mergeExHentai(db *sql.DB, latestID int, models []*HitomiColumnModel, ids []int) ([]*HitomiColumnModel, []int) {
 	cookie := getEHCookie()
 	ehArticles := syncExHentai(cookie, latestID)
@@ -385,7 +361,6 @@ func mergeExHentai(db *sql.DB, latestID int, models []*HitomiColumnModel, ids []
 		}
 	}
 
-	// Supplement models from current hitomi batch
 	hitomiIDs := make(map[int]bool, len(models))
 	for _, m := range models {
 		hitomiIDs[m.ID] = true
@@ -394,7 +369,6 @@ func mergeExHentai(db *sql.DB, latestID int, models []*HitomiColumnModel, ids []
 		}
 	}
 
-	// Remaining EH IDs not in current hitomi batch
 	var remainIDs []int
 	for id := range ehByID {
 		if !hitomiIDs[id] {
@@ -402,7 +376,6 @@ func mergeExHentai(db *sql.DB, latestID int, models []*HitomiColumnModel, ids []
 		}
 	}
 
-	// Check DB for existing hitomi records
 	dbExisting, err := getExistingByIDs(db, remainIDs)
 	if err != nil {
 		log.Fatalf("Failed to query DB for EH merge: %v", err)
