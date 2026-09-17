@@ -86,6 +86,16 @@ export function getEhCookieStatus(): EhCookieStatus {
   return { configured: false, source: null };
 }
 
+export function getStoredEhCookieUpdatedAt(): Date | null {
+  if (!readStoredCookie()) return null;
+  try {
+    return fs.statSync(getCookiePath()).mtime;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
 export function saveEhCookie(cookie: string): EhCookieStatus {
   const normalized = validateExhentaiCookie(cookie);
   const cookiePath = getCookiePath();
