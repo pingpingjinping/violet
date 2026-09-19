@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Writable } from 'node:stream';
 import type { Response as ExpressResponse } from 'express';
-import { proxyImage } from './image-proxy.js';
+import { proxyImage, resolveImageSource } from './image-proxy.js';
 
 test('slow receivers exert backpressure without changing image bytes or headers', async () => {
   const originalFetch = globalThis.fetch;
@@ -54,4 +54,41 @@ test('receiver disconnect aborts an upstream request still waiting for headers',
     assert.equal(aborted, true);
     assert.equal(response.listenerCount('close'), 0);
   } finally { globalThis.fetch = originalFetch; }
+});
+
+test('prefers an MPV-dispatched normal image and preserves its MPV referer', async () => {
+  const source = await resolveImageSource(
+    'https://exhentai.org/s/abc/900001-1',
+    undefined,
+    undefined,
+    async () => ({
+      url: 'https://node.hath.network/normal.webp',
+      referer: 'https://exhentai.org/mpv/900001/token/',
+    }),
+  );
+
+  assert.equal(source.url, 'https://node.hath.network/normal.webp');
+  assert.equal(source.headers.Referer, 'https://exhentai.org/mpv/900001/token/');
+});
+
+test('falls back to the existing /s/ HTML resolver when MPV resolution fails', async () => {
+  const originalFetch = globalThis.fetch;
+  const pageUrl = 'https://exhentai.org/s/def/900002-1';
+  globalThis.fetch = async (input) => {
+    assert.equal(String(input), pageUrl);
+    return new Response('<html><img id="img" src="https://fallback.hath.network/fallback.webp"></html>');
+  };
+
+  try {
+    const source = await resolveImageSource(
+      pageUrl,
+      undefined,
+      undefined,
+      async () => { throw new Error('MPV unavailable'); },
+    );
+    assert.equal(source.url, 'https://fallback.hath.network/fallback.webp');
+    assert.equal(source.headers.Referer, pageUrl);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
