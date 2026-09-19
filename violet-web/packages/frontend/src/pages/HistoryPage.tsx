@@ -1,9 +1,10 @@
 import { useState, useCallback, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams, useLocation } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { getHistoryEntries } from '../api/history';
 import { useAllArticles } from '../hooks/useAllArticles';
+import { historyArticleIds, orderHistoryArticles } from './history-articles';
 import { LocalSearchSection } from '../components/search/LocalSearchSection';
 import { SearchResultGrid } from '../components/search/SearchResultGrid';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
@@ -43,7 +44,18 @@ export function HistoryPage() {
     },
     [page, searchParams, setSearchParams],
   );
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const location = useLocation();
+  const visibleKey = `history-visible:${location.key}`;
+  const readVisibleCount = () => {
+    try {
+      const value = Number(sessionStorage.getItem(visibleKey));
+      return Number.isSafeInteger(value) && value >= PAGE_SIZE ? value : PAGE_SIZE;
+    } catch { return PAGE_SIZE; }
+  };
+  const [visibleState, setVisibleState] = useState(() => ({
+    key: visibleKey, count: readVisibleCount(),
+  }));
+  const visibleCount = visibleState.key === visibleKey ? visibleState.count : readVisibleCount();
 
   // Fetch all history article IDs
   const { data: historyEntries, isLoading: idsLoading } = useQuery({
@@ -51,17 +63,23 @@ export function HistoryPage() {
     queryFn: getHistoryEntries,
   });
   const articleIds = useMemo(
-    () => historyEntries?.map((entry) => entry.articleId),
+    () => historyEntries && historyArticleIds(historyEntries),
     [historyEntries],
   );
 
   // Fetch all articles in bulk
-  const { data: allArticles, isLoading: articlesLoading } = useAllArticles(
-    'readHistory',
+  const { data: articleDetails, isLoading: articlesLoading } = useAllArticles(
+    'historyArticleDetails',
     articleIds,
   );
 
-  const isLoading = idsLoading || articlesLoading;
+  // Reading changes dates/order, not article metadata. Keep its cache independent
+  // of readHistory invalidation, then apply the current reading order locally.
+  const allArticles = useMemo(
+    () => orderHistoryArticles(historyEntries ?? [], articleDetails ?? []),
+    [historyEntries, articleDetails],
+  );
+  const isLoading = idsLoading || (!!articleIds?.length && articlesLoading);
 
   // Tag summary from ALL articles
   const tagSummary = useArticleTagSummary(allArticles ?? []);
@@ -116,8 +134,10 @@ export function HistoryPage() {
     });
 
   const handleLoadMore = useCallback(() => {
-    setVisibleCount((prev) => prev + PAGE_SIZE);
-  }, []);
+    const count = visibleCount + PAGE_SIZE;
+    try { sessionStorage.setItem(visibleKey, String(count)); } catch { /* Optional restoration. */ }
+    setVisibleState({ key: visibleKey, count });
+  }, [visibleCount, visibleKey]);
 
   const hasMore = scrollMode === 'infinite' && visibleCount < filteredArticles.length;
 
