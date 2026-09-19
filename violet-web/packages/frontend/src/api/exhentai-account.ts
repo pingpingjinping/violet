@@ -1,4 +1,4 @@
-import { api } from './client';
+import { api, syncTokenHeaders } from './client';
 
 export interface ExhentaiAccountStatus {
   configured: boolean;
@@ -18,19 +18,20 @@ export async function saveExhentaiAccount(
   username: string,
   password: string,
 ): Promise<ExhentaiAccountStatus> {
-  const { data } = await api.put<ExhentaiAccountStatus>('/settings/exhentai-account', {
-    username,
-    password,
-  });
+  const { data } = await api.put<ExhentaiAccountStatus>(
+    '/settings/exhentai-account',
+    { username, password },
+    { headers: syncTokenHeaders() },
+  );
   return data;
 }
 
 export async function refreshExhentaiAccount(): Promise<ExhentaiAccountStatus> {
-  const { data } = await api.post<ExhentaiAccountStatus>('/settings/exhentai-account/refresh');
+  const { data } = await api.post<ExhentaiAccountStatus>('/settings/exhentai-account/refresh', undefined, { headers: syncTokenHeaders() });
   return data;
 }
 
 export async function removeExhentaiAccount(): Promise<ExhentaiAccountStatus> {
-  const { data } = await api.delete<ExhentaiAccountStatus>('/settings/exhentai-account');
+  const { data } = await api.delete<ExhentaiAccountStatus>('/settings/exhentai-account', { headers: syncTokenHeaders() });
   return data;
 }
