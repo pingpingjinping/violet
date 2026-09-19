@@ -3,6 +3,48 @@ import { test } from 'node:test';
 import { Writable } from 'node:stream';
 import type { Response as ExpressResponse } from 'express';
 import { proxyImage, resolveImageSource } from './image-proxy.js';
+import { MediaError } from './media-error.js';
+
+test('HTTP 509 from image upstream is a typed bandwidth error, never image bytes', async () => {
+  const originalFetch = globalThis.fetch;
+  const response = new Writable({ write(_chunk, _encoding, callback) { callback(); } });
+  globalThis.fetch = async () => new Response('limit', { status: 509 });
+  try {
+    await assert.rejects(proxyImage('https://example.test/image', undefined,
+      response as unknown as ExpressResponse), { code: 'BANDWIDTH_LIMIT' });
+  } finally { globalThis.fetch = originalFetch; response.destroy(); }
+});
+
+test('HTML returned instead of an image is not streamed or cached as a successful image', async () => {
+  const originalFetch = globalThis.fetch;
+  const response = new Writable({ write(_chunk, _encoding, callback) { callback(); } });
+  globalThis.fetch = async () => new Response('<html>maintenance</html>', {
+    headers: { 'Content-Type': 'text/html' },
+  });
+  try {
+    await assert.rejects(proxyImage('https://example.test/image', undefined,
+      response as unknown as ExpressResponse), { code: 'UPSTREAM_ERROR' });
+  } finally { globalThis.fetch = originalFetch; response.destroy(); }
+});
+
+test('MPV bandwidth errors survive a generic legacy fallback failure', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response('<html>maintenance</html>');
+  try {
+    await assert.rejects(resolveImageSource('https://exhentai.org/s/test/900009-1',
+      undefined, undefined, async () => { throw new MediaError('BANDWIDTH_LIMIT'); }),
+    { code: 'BANDWIDTH_LIMIT' });
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('legacy 509 placeholder is rejected before it enters the image cache', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response('<img id="img" src="https://ehgt.org/g/509.gif">');
+  try {
+    await assert.rejects(resolveImageSource('https://exhentai.org/s/test/900010-1',
+      undefined, undefined, async () => null), { code: 'BANDWIDTH_LIMIT' });
+  } finally { globalThis.fetch = originalFetch; }
+});
 
 test('slow receivers exert backpressure without changing image bytes or headers', async () => {
   const originalFetch = globalThis.fetch;

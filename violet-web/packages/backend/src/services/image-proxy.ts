@@ -3,6 +3,7 @@ import { pipeline } from 'node:stream/promises';
 import type { Response } from 'express';
 import { getEhCookie } from './eh-cookie-store.js';
 import { refreshEhCookieAfterAuthFailure } from './eh-auto-login.js';
+import { MediaError, httpMediaError, ehPageError, checkImageLimitUrl, preferMediaError } from './media-error.js';
 import {
   resolveEhMpvImage,
   type ResolvedEhMpvImage,
@@ -42,8 +43,10 @@ function decodeHtmlAttribute(value: string): string {
 function extractEhImageUrl(html: string): string {
   const tag = html.match(/<img\b[^>]*\bid=["']img["'][^>]*>/i)?.[0];
   const source = tag?.match(/\bsrc=["']([^"']+)["']/i)?.[1];
-  if (!source) throw new Error('E-Hentai image page did not contain an image URL');
-  return new URL(decodeHtmlAttribute(source), 'https://exhentai.org/').toString();
+  if (!source) throw ehPageError(html);
+  const url = new URL(decodeHtmlAttribute(source), 'https://exhentai.org/').toString();
+  checkImageLimitUrl(url);
+  return url;
 }
 
 function imageHeaders(url: string, referer?: string): Record<string, string> {
@@ -76,44 +79,26 @@ async function fetchEhImagePage(
   url: string,
   signal?: AbortSignal,
 ): Promise<string> {
-  const response = await fetch(url, {
-    headers: imageHeaders(url, url),
-    redirect: 'manual',
-    signal,
-  });
-  const redirected = response.status >= 300 && response.status < 400;
-  if (!response.ok || redirected) {
-    await response.body?.cancel();
-    const refreshed = await refreshEhCookieAfterAuthFailure();
-    if (!refreshed) throw new Error(`E-Hentai image page returned ${response.status}`);
-
-    const retry = await fetch(url, {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const response = await fetch(url, {
       headers: imageHeaders(url, url),
       redirect: 'manual',
       signal,
     });
-    if (!retry.ok) {
-      await retry.body?.cancel();
-      throw new Error(`E-Hentai image page returned ${retry.status} after cookie refresh`);
+    let error: MediaError;
+    if (!response.ok) {
+      await response.body?.cancel();
+      error = response.status >= 300 && response.status < 400
+        ? new MediaError('AUTH_REQUIRED') : httpMediaError(response.status);
+    } else {
+      const html = await response.text();
+      if (/<img\b[^>]*\bid=["']img["']/i.test(html)) return html;
+      error = ehPageError(html);
     }
-    return retry.text();
+    if (error.code !== 'AUTH_REQUIRED' || attempt > 0
+      || !(await refreshEhCookieAfterAuthFailure())) throw error;
   }
-
-  const html = await response.text();
-  if (/<img\b[^>]*\bid=["']img["']/i.test(html)) return html;
-
-  const refreshed = await refreshEhCookieAfterAuthFailure();
-  if (!refreshed) return html;
-  const retry = await fetch(url, {
-    headers: imageHeaders(url, url),
-    redirect: 'manual',
-    signal,
-  });
-  if (!retry.ok) {
-    await retry.body?.cancel();
-    throw new Error(`E-Hentai image page returned ${retry.status} after cookie refresh`);
-  }
-  return retry.text();
+  throw new MediaError('UPSTREAM_ERROR');
 }
 
 export async function resolveImageSource(
@@ -134,6 +119,7 @@ export async function resolveImageSource(
       return { url: cached.url, headers: imageHeaders(cached.url, cached.referer) };
     }
 
+    let mpvError: unknown;
     try {
       const mpvSource = await mpvResolver(rewritten, signal);
       if (mpvSource) {
@@ -143,14 +129,19 @@ export async function resolveImageSource(
           headers: imageHeaders(mpvSource.url, mpvSource.referer),
         };
       }
-    } catch {
+    } catch (error) {
+      mpvError = error;
       // MPV is an optimization only. Keep the existing /s/ page resolver as fallback.
     }
 
-    const html = await fetchEhImagePage(rewritten, signal);
-    const imageUrl = extractEhImageUrl(html);
-    cacheEhImage(rewritten, imageUrl, rewritten);
-    return { url: imageUrl, headers: imageHeaders(imageUrl, rewritten) };
+    try {
+      const html = await fetchEhImagePage(rewritten, signal);
+      const imageUrl = extractEhImageUrl(html);
+      cacheEhImage(rewritten, imageUrl, rewritten);
+      return { url: imageUrl, headers: imageHeaders(imageUrl, rewritten) };
+    } catch (error) {
+      throw preferMediaError(mpvError, error);
+    }
   }
 
   return { url: rewritten, headers: imageHeaders(rewritten, referer) };
@@ -165,19 +156,24 @@ export async function proxyImage(
   const onClose = () => controller.abort();
   res.once('close', onClose);
   try {
-    const source = await resolveImageSource(url, referer, controller.signal);
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]);
+    const source = await resolveImageSource(url, referer, signal);
+    checkImageLimitUrl(source.url);
     const upstream = await fetch(source.url, {
       headers: source.headers,
-      signal: controller.signal,
+      signal,
     });
 
     if (!upstream.ok) {
       await upstream.body?.cancel();
-      res.status(upstream.status).json({ error: `Upstream returned ${upstream.status}` });
-      return;
+      throw httpMediaError(upstream.status);
     }
 
     const contentType = upstream.headers.get('content-type');
+    if (contentType && /^(?:text\/|application\/(?:json|xhtml))/i.test(contentType)) {
+      await upstream.body?.cancel();
+      throw new MediaError('UPSTREAM_ERROR');
+    }
     if (contentType) res.setHeader('Content-Type', contentType);
 
     const contentLength = upstream.headers.get('content-length');

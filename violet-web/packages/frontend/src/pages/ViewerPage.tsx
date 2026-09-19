@@ -15,6 +15,7 @@ import { useIntensityTimeline } from '../hooks/useIntensityTimeline';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useEffect, useRef, useState } from 'react';
 import { useViewerFullscreen } from '../hooks/useViewerFullscreen';
+import { galleryErrorCode } from '../api/media-error';
 
 export function ViewerPage() {
   useViewerFullscreen();
@@ -23,7 +24,7 @@ export function ViewerPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const galleryId = parseInt(id!);
-  const { data: imageList, isLoading } = useImageList(galleryId);
+  const { data: imageList, isLoading, error, refetch, isFetching } = useImageList(galleryId);
   const { data: intensityTimeline } = useIntensityTimeline(galleryId);
 
   const totalPages = imageList?.urls.length ?? 0;
@@ -157,9 +158,13 @@ export function ViewerPage() {
         justifyContent: 'center',
         background: '#000',
         color: '#fff',
+        flexDirection: 'column',
+        gap: 16,
         zIndex: 100,
       }}>
-        {t('viewer.noImages')}
+        <p role="alert">{error ? t(`viewer.errors.${galleryErrorCode(error)}`) : t('viewer.noImages')}</p>
+        <button disabled={isFetching} onClick={() => void refetch()}>{t('viewer.errorRetry')}</button>
+        <button onClick={() => navigate(-1)}>{t('viewer.errorBack')}</button>
       </div>
     );
   }

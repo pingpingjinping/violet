@@ -12,6 +12,7 @@ import { getContentDb } from './content-db.js';
 import { getEhCookie } from './eh-cookie-store.js';
 import { refreshEhCookieAfterAuthFailure } from './eh-auto-login.js';
 import { resolveEhMpvGalleryPages } from './eh-mpv.js';
+import { MediaError, httpMediaError, ehPageError, preferMediaError } from './media-error.js';
 
 const BASE_DOMAIN = 'gold-usergeneratedcontent.net';
 const GG_JS_URL = `https://ltn.${BASE_DOMAIN}/gg.js`;
@@ -43,16 +44,18 @@ export interface EhGalleryMetadata {
   thumbnail: string | null;
 }
 
-class UpstreamHttpError extends Error {
+class UpstreamHttpError extends MediaError {
   constructor(
     readonly url: string,
     readonly status: number,
   ) {
-    super(`Failed to fetch ${url}: ${status}`);
+    super(httpMediaError(status).code);
   }
 }
 
-class EhAuthenticationError extends Error {}
+class EhAuthenticationError extends MediaError {
+  constructor(_message: string) { super('AUTH_REQUIRED'); }
+}
 
 let routingCache: GgRouting | null = null;
 let latestUpdate = 0;
@@ -63,6 +66,7 @@ const pendingGalleries = new Map<number, Promise<ImageList>>();
 async function fetchText(url: string, headers?: Record<string, string>): Promise<string> {
   const res = await fetch(url, {
     headers: { 'User-Agent': USER_AGENT, ...headers },
+    signal: AbortSignal.timeout(EH_REQUEST_TIMEOUT_MS),
   });
   if (!res.ok) throw new UpstreamHttpError(url, res.status);
   return res.text();
@@ -130,10 +134,13 @@ async function fetchEhGalleryPageOnce(url: string, cookie: string | null): Promi
   if (response.status === 301 || response.status === 302 || response.status === 303 || response.status === 307 || response.status === 308) {
     throw new EhAuthenticationError(`E-Hentai redirected while loading ${url}`);
   }
+  if (response.status === 401) throw new EhAuthenticationError('Login required');
   if (!response.ok) throw new UpstreamHttpError(url, response.status);
   const html = await response.text();
   if (!html.includes('id="gdt"') && !html.includes("id='gdt'")) {
-    throw new EhAuthenticationError(`E-Hentai gallery unavailable or authentication required: ${url}`);
+    const error = ehPageError(html);
+    if (error.code === 'AUTH_REQUIRED') throw new EhAuthenticationError(error.message);
+    throw error;
   }
   return html;
 }
@@ -199,7 +206,7 @@ async function resolveEhGallery(id: number, metadata: EhGalleryMetadata): Promis
         if (expected && imagePages.length >= expected) break;
       }
 
-      if (imagePages.length === 0) throw new Error(`No E-Hentai image pages found for ${id}`);
+      if (imagePages.length === 0) throw new MediaError('NO_IMAGES');
       const urls = expected ? imagePages.slice(0, expected) : imagePages;
       const fallbackThumbs = thumbnails.length > 0
         ? thumbnails.slice(0, urls.length)
@@ -210,7 +217,7 @@ async function resolveEhGallery(id: number, metadata: EhGalleryMetadata): Promis
         smallThumbnails: [...fallbackThumbs],
       };
     } catch (error) {
-      lastError = error;
+      lastError = preferMediaError(lastError, error);
     }
   }
 
@@ -362,6 +369,7 @@ async function resolveGalleryUncached(
   try {
     const galleryInfo = await getGalleryInfo(id);
     const files = galleryInfo.files ?? [];
+    if (!files.some((file) => file.hash)) throw new MediaError('NO_IMAGES');
     return {
       urls: buildImageUrls(files, routingCache),
       bigThumbnails: buildThumbnailUrls(files, routingCache, 'big'),

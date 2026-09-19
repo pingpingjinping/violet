@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useCachedImage } from '../../hooks/useCachedImage';
 import styles from './ViewerImage.module.css';
+import { diagnoseImageError, type MediaErrorCode } from '../../api/media-error';
 
 interface ViewerImageProps {
   src: string;
@@ -20,6 +21,7 @@ export function ViewerImage({ src, alt = '', active = true, onLoad, cacheKey }: 
   const { src: effectiveSrc, onLoadSuccess } = useCachedImage(src, cacheKey ?? null);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
+  const [errorCode, setErrorCode] = useState<MediaErrorCode | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [shouldRender, setShouldRender] = useState(active);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -31,6 +33,16 @@ export function ViewerImage({ src, alt = '', active = true, onLoad, cacheKey }: 
     setError(false);
     setRetryCount(0);
   }, [effectiveSrc]);
+
+  useEffect(() => {
+    setErrorCode(null);
+    if (!error || !active) return;
+    const controller = new AbortController();
+    void diagnoseImageError(effectiveSrc, controller.signal).then((code) => {
+      if (!controller.signal.aborted) setErrorCode(code);
+    });
+    return () => controller.abort();
+  }, [error, active, effectiveSrc]);
 
   // Debounce active state: only render after staying active for a short period
   useEffect(() => {
@@ -99,7 +111,8 @@ export function ViewerImage({ src, alt = '', active = true, onLoad, cacheKey }: 
         />
       ) : error ? (
         <div className={styles.error} onClick={manualRetry}>
-          {t('viewer.loadError', { max: MAX_RETRIES })}
+          {errorCode ? `${t(`viewer.errors.${errorCode}`)} ${t('viewer.errorRetry')}`
+            : t('viewer.loadError', { max: MAX_RETRIES })}
         </div>
       ) : null}
       {!loaded && !error && (

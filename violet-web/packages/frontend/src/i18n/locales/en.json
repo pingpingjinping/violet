@@ -232,6 +232,17 @@
     }
   },
   "viewer": {
+    "errorRetry": "Retry",
+    "errorBack": "Back",
+    "errors": {
+      "AUTH_REQUIRED": "The source requires login. Check your E-Hentai/ExHentai cookie in Settings.",
+      "BANDWIDTH_LIMIT": "The source image bandwidth limit (509) has been reached. Try again later.",
+      "RATE_LIMITED": "Too many requests to the source. Try again later.",
+      "UNAVAILABLE": "This content is missing or inaccessible. It may be removed or restricted.",
+      "NO_IMAGES": "The source returned no images.",
+      "NETWORK_ERROR": "Could not connect to the image source. Check the connection and retry.",
+      "UPSTREAM_ERROR": "The source returned an unexpected response. Please retry later."
+    },
     "noImages": "No images found for this gallery.",
     "back": "Back",
     "settings": "Settings",
