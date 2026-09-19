@@ -35,6 +35,16 @@ export interface ResolvedEhMpvImage {
   referer: string;
 }
 
+export interface ResolvedEhMpvGallery {
+  urls: string[];
+  referer: string;
+}
+
+export interface EhMpvService {
+  resolveImage: (url: string, signal?: AbortSignal) => Promise<ResolvedEhMpvImage | null>;
+  resolveGalleryPages: (gid: number, ehash: string) => Promise<ResolvedEhMpvGallery | null>;
+}
+
 class EhMpvAuthenticationError extends Error {}
 
 function getEhashFromDb(gid: number): string | null {
@@ -83,9 +93,9 @@ function parseMpvHtml(html: string): { mpvkey: string; imgkeys: string[] } {
   return { mpvkey, imgkeys };
 }
 
-export function createEhMpvResolver(
+export function createEhMpvService(
   overrides: Partial<EhMpvDependencies> = {},
-): (url: string, signal?: AbortSignal) => Promise<ResolvedEhMpvImage | null> {
+): EhMpvService {
   const deps: EhMpvDependencies = {
     fetchFn: overrides.fetchFn ?? ((input, init) => globalThis.fetch(input, init)),
     getCookie: overrides.getCookie ?? getEhCookie,
@@ -214,7 +224,10 @@ export function createEhMpvResolver(
     return { url: payload.i, referer: data.referer };
   }
 
-  return async (url: string, signal?: AbortSignal): Promise<ResolvedEhMpvImage | null> => {
+  async function resolveImage(
+    url: string,
+    signal?: AbortSignal,
+  ): Promise<ResolvedEhMpvImage | null> {
     const pageInfo = parseEhImagePage(url);
     if (!pageInfo) return null;
 
@@ -236,7 +249,32 @@ export function createEhMpvResolver(
       if (!refreshedCookie) throw error;
       return dispatchImage(pageInfo, data, refreshedCookie, signal);
     }
-  };
+  }
+
+  async function resolveGalleryPages(
+    gid: number,
+    ehash: string,
+  ): Promise<ResolvedEhMpvGallery | null> {
+    if (!deps.getCookie()) return null;
+    const data = await loadMpv(gid, ehash);
+    return {
+      referer: data.referer,
+      urls: data.imgkeys.map(
+        (imgkey, index) => `https://exhentai.org/s/${imgkey}/${gid}-${index + 1}`,
+      ),
+    };
+  }
+
+  return { resolveImage, resolveGalleryPages };
 }
 
-export const resolveEhMpvImage = createEhMpvResolver();
+export function createEhMpvResolver(
+  overrides: Partial<EhMpvDependencies> = {},
+): (url: string, signal?: AbortSignal) => Promise<ResolvedEhMpvImage | null> {
+  return createEhMpvService(overrides).resolveImage;
+}
+
+const defaultEhMpvService = createEhMpvService();
+
+export const resolveEhMpvImage = defaultEhMpvService.resolveImage;
+export const resolveEhMpvGalleryPages = defaultEhMpvService.resolveGalleryPages;
