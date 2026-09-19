@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -76,5 +77,57 @@ func TestParseResolvedImageList(t *testing.T) {
 	}
 	if files[1].Num != 2 || files[1].Ext != "webp" {
 		t.Fatalf("files[1] = %+v", files[1])
+	}
+}
+
+func TestHitomiResolverUsesStaleScriptWhenGgRefreshFails(t *testing.T) {
+	const ggBody = `
+'use strict';
+var gg = {
+  m: function(g) { return g % 2; },
+  b: "base/",
+  s: function(h) { return h.substring(h.length - 1); }
+};
+`
+	const hash = "000000000000000000000000000000000000000000000000000000000000abc"
+
+	ggRequests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/gg.js":
+			ggRequests++
+			switch ggRequests {
+			case 1:
+				_, _ = w.Write([]byte(ggBody))
+			case 2:
+				http.Error(w, "unavailable", http.StatusServiceUnavailable)
+			default:
+				_, _ = w.Write([]byte("not valid JavaScript"))
+			}
+		case strings.HasPrefix(r.URL.Path, "/galleries/"):
+			_, _ = w.Write([]byte(`var galleryinfo = {"files":[{"hash":"` + hash + `","name":"001.jpg","hasavif":1,"haswebp":1}]};`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	resolver := NewHitomiResolver(server.Client())
+	resolver.ggURL = server.URL + "/gg.js"
+	resolver.galleryBaseURL = server.URL + "/galleries"
+	resolver.cacheTTL = 0
+	resolver.refreshRetry = 0
+
+	for _, id := range []string{"123", "124", "125"} {
+		files, err := resolver.ResolveFiles(context.Background(), id)
+		if err != nil {
+			t.Fatalf("ResolveFiles(%s): %v", id, err)
+		}
+		if len(files) != 1 || files[0].URL == "" {
+			t.Fatalf("ResolveFiles(%s) = %+v", id, files)
+		}
+	}
+	if ggRequests != 3 {
+		t.Fatalf("gg.js requests = %d, want 3", ggRequests)
 	}
 }
