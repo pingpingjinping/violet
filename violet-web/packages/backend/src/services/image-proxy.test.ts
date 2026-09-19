@@ -5,6 +5,20 @@ import type { Response as ExpressResponse } from 'express';
 import { proxyImage, resolveImageSource } from './image-proxy.js';
 import { MediaError } from './media-error.js';
 
+test('EH fallback image pages stay on EH without retrying ExH MPV', async () => {
+  const originalFetch = globalThis.fetch;
+  const url = 'https://e-hentai.org/s/test/900011-1';
+  globalThis.fetch = async (input) => {
+    assert.equal(String(input), url);
+    return new Response('<img id="img" src="https://ehgt.org/image.jpg">');
+  };
+  try {
+    const result = await resolveImageSource(url, undefined, undefined,
+      async () => { assert.fail('EH must not retry ExH MPV'); });
+    assert.equal(result.url, 'https://ehgt.org/image.jpg');
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test('HTTP 509 from image upstream is a typed bandwidth error, never image bytes', async () => {
   const originalFetch = globalThis.fetch;
   const response = new Writable({ write(_chunk, _encoding, callback) { callback(); } });

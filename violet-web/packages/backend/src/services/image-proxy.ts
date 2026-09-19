@@ -121,7 +121,10 @@ export async function resolveImageSource(
 
     let mpvError: unknown;
     try {
-      const mpvSource = await mpvResolver(rewritten, signal);
+      // EH was selected only after ExH failed/skipped. Do not retry ExH MPV
+      // for every page of an EH fallback gallery.
+      const mpvSource = parsed.hostname === 'exhentai.org'
+        ? await mpvResolver(rewritten, signal) : null;
       if (mpvSource) {
         cacheEhImage(rewritten, mpvSource.url, mpvSource.referer);
         return {
