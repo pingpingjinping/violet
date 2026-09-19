@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { requireSyncToken } from '../middleware/sync-token-auth.js';
 import {
   clearStoredEhCookie,
   getEhCookieStatus,
@@ -21,7 +22,7 @@ settingsRouter.get('/exhentai-cookie', (_req, res) => {
   }
 });
 
-settingsRouter.put('/exhentai-cookie', (req, res) => {
+settingsRouter.put('/exhentai-cookie', requireSyncToken, (req, res) => {
   try {
     if (typeof req.body?.cookie !== 'string') {
       res.status(400).json({ error: 'Cookie must be a string' });
@@ -35,7 +36,7 @@ settingsRouter.put('/exhentai-cookie', (req, res) => {
   }
 });
 
-settingsRouter.delete('/exhentai-cookie', (_req, res) => {
+settingsRouter.delete('/exhentai-cookie', requireSyncToken, (_req, res) => {
   try {
     res.json(clearStoredEhCookie());
   } catch {
@@ -51,7 +52,7 @@ settingsRouter.get('/exhentai-account', (_req, res) => {
   }
 });
 
-settingsRouter.put('/exhentai-account', async (req, res) => {
+settingsRouter.put('/exhentai-account', requireSyncToken, async (req, res) => {
   try {
     if (typeof req.body?.username !== 'string' || typeof req.body?.password !== 'string') {
       res.status(400).json({ error: 'Username and password are required' });
@@ -65,7 +66,7 @@ settingsRouter.put('/exhentai-account', async (req, res) => {
   }
 });
 
-settingsRouter.post('/exhentai-account/refresh', async (_req, res) => {
+settingsRouter.post('/exhentai-account/refresh', requireSyncToken, async (_req, res) => {
   try {
     res.json(await refreshEhCookieNow());
   } catch (error) {
@@ -75,7 +76,7 @@ settingsRouter.post('/exhentai-account/refresh', async (_req, res) => {
   }
 });
 
-settingsRouter.delete('/exhentai-account', (_req, res) => {
+settingsRouter.delete('/exhentai-account', requireSyncToken, (_req, res) => {
   try {
     res.json(clearEhCredentials());
   } catch {
