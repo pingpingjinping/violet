@@ -11,6 +11,7 @@ import type { ImageList } from '@violet-web/shared';
 import { getContentDb } from './content-db.js';
 import { getEhCookie } from './eh-cookie-store.js';
 import { refreshEhCookieAfterAuthFailure } from './eh-auto-login.js';
+import { resolveEhMpvGalleryPages } from './eh-mpv.js';
 
 const BASE_DOMAIN = 'gold-usergeneratedcontent.net';
 const GG_JS_URL = `https://ltn.${BASE_DOMAIN}/gg.js`;
@@ -146,16 +147,39 @@ async function fetchEhGalleryPage(url: string): Promise<string> {
 }
 
 async function resolveEhGallery(id: number, metadata: EhGalleryMetadata): Promise<ImageList> {
+  const expected = metadata.files && metadata.files > 0 ? metadata.files : null;
+  let lastError: unknown;
+
+  if (getEhCookie()) {
+    try {
+      const mpvGallery = await resolveEhMpvGalleryPages(id, metadata.ehash);
+      if (mpvGallery && mpvGallery.urls.length > 0) {
+        if (expected && mpvGallery.urls.length < expected) {
+          throw new Error(
+            `ExHentai MPV returned ${mpvGallery.urls.length}/${expected} pages for ${id}`,
+          );
+        }
+        const urls = expected ? mpvGallery.urls.slice(0, expected) : mpvGallery.urls;
+        const fallbackThumbs = metadata.thumbnail ? [metadata.thumbnail] : [];
+        return {
+          urls,
+          bigThumbnails: fallbackThumbs,
+          smallThumbnails: [...fallbackThumbs],
+        };
+      }
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
   const candidates = getEhCookie()
     ? ['https://exhentai.org', 'https://e-hentai.org']
     : ['https://e-hentai.org'];
-  let lastError: unknown;
 
   for (const origin of candidates) {
     try {
       const imagePages: string[] = [];
       const thumbnails: string[] = [];
-      const expected = metadata.files && metadata.files > 0 ? metadata.files : null;
       const maxPages = expected ? Math.ceil(expected / 20) + 2 : 100;
 
       for (let page = 0; page < maxPages; page++) {
