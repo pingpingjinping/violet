@@ -3,11 +3,20 @@ import { pipeline } from 'node:stream/promises';
 import type { Response } from 'express';
 import { getEhCookie } from './eh-cookie-store.js';
 import { refreshEhCookieAfterAuthFailure } from './eh-auto-login.js';
+import {
+  resolveEhMpvImage,
+  type ResolvedEhMpvImage,
+} from './eh-mpv.js';
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 const EH_PAGE_CACHE_TTL = 60 * 60 * 1000;
-const ehPageCache = new Map<string, { url: string; timestamp: number }>();
+const ehPageCache = new Map<string, { url: string; referer: string; timestamp: number }>();
+
+type EhMpvResolver = (
+  url: string,
+  signal?: AbortSignal,
+) => Promise<ResolvedEhMpvImage | null>;
 
 export interface ResolvedImageSource {
   url: string;
@@ -51,6 +60,16 @@ function imageHeaders(url: string, referer?: string): Record<string, string> {
     headers.Referer = referer;
   }
   return headers;
+}
+
+function cacheEhImage(pageUrl: string, imageUrl: string, referer: string) {
+  ehPageCache.set(pageUrl, { url: imageUrl, referer, timestamp: Date.now() });
+  if (ehPageCache.size <= 2000) return;
+
+  const oldest = [...ehPageCache.entries()]
+    .sort((a, b) => a[1].timestamp - b[1].timestamp)
+    .slice(0, ehPageCache.size - 2000);
+  oldest.forEach(([key]) => ehPageCache.delete(key));
 }
 
 async function fetchEhImagePage(
@@ -101,6 +120,7 @@ export async function resolveImageSource(
   url: string,
   referer?: string,
   signal?: AbortSignal,
+  mpvResolver: EhMpvResolver = resolveEhMpvImage,
 ): Promise<ResolvedImageSource> {
   const rewritten = url.replace(
     /^(https?:\/\/)([a-z]+)\.hitomi\.la\//,
@@ -111,18 +131,25 @@ export async function resolveImageSource(
   if (isEhGalleryHost(parsed.hostname) && parsed.pathname.startsWith('/s/')) {
     const cached = ehPageCache.get(rewritten);
     if (cached && Date.now() - cached.timestamp < EH_PAGE_CACHE_TTL) {
-      return { url: cached.url, headers: imageHeaders(cached.url, rewritten) };
+      return { url: cached.url, headers: imageHeaders(cached.url, cached.referer) };
+    }
+
+    try {
+      const mpvSource = await mpvResolver(rewritten, signal);
+      if (mpvSource) {
+        cacheEhImage(rewritten, mpvSource.url, mpvSource.referer);
+        return {
+          url: mpvSource.url,
+          headers: imageHeaders(mpvSource.url, mpvSource.referer),
+        };
+      }
+    } catch {
+      // MPV is an optimization only. Keep the existing /s/ page resolver as fallback.
     }
 
     const html = await fetchEhImagePage(rewritten, signal);
     const imageUrl = extractEhImageUrl(html);
-    ehPageCache.set(rewritten, { url: imageUrl, timestamp: Date.now() });
-    if (ehPageCache.size > 2000) {
-      const oldest = [...ehPageCache.entries()]
-        .sort((a, b) => a[1].timestamp - b[1].timestamp)
-        .slice(0, ehPageCache.size - 2000);
-      oldest.forEach(([key]) => ehPageCache.delete(key));
-    }
+    cacheEhImage(rewritten, imageUrl, rewritten);
     return { url: imageUrl, headers: imageHeaders(imageUrl, rewritten) };
   }
 
