@@ -118,3 +118,53 @@ test('uses MPV imagelist to build ExHentai page URLs before legacy gallery scrap
     else process.env.EXHENTAI_COOKIE = oldCookie;
   }
 });
+
+test('keeps the last good gg.js routing when refreshes fail', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalDateNow = Date.now;
+  const routedHash = `${'0'.repeat(61)}123`;
+  let now = originalDateNow() + 24 * 60 * 60 * 1000;
+  let phase: 'prime' | 'http-error' | 'malformed' = 'prime';
+  let ggRequests = 0;
+
+  Date.now = () => now;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+
+    if (url.endsWith('/gg.js')) {
+      ggRequests += 1;
+      if (phase === 'http-error') return new Response('unavailable', { status: 503 });
+      if (phase === 'malformed') return new Response('<html>not routing data</html>');
+      return new Response(
+        "var gg = { b: 'stale/', m: function(g) { var o = 0; switch(g) { case 786: o = 1; } return o; } };",
+      );
+    }
+
+    if (url.includes('/galleries/')) {
+      return new Response(`var galleryinfo = {"files":[{"hash":"${routedHash}"}]};`);
+    }
+
+    throw new Error(`Unexpected test URL: ${url}`);
+  };
+
+  try {
+    const primed = await resolveGallery(2001);
+    assert.deepEqual(primed.urls, [
+      `https://w2.gold-usergeneratedcontent.net/stale/786/${routedHash}.webp`,
+    ]);
+
+    now += 31 * 60 * 1000;
+    phase = 'http-error';
+    const afterHttpError = await resolveGallery(2002);
+    assert.deepEqual(afterHttpError.urls, primed.urls);
+
+    now += 2 * 60 * 1000;
+    phase = 'malformed';
+    const afterMalformedResponse = await resolveGallery(2003);
+    assert.deepEqual(afterMalformedResponse.urls, primed.urls);
+    assert.equal(ggRequests, 3);
+  } finally {
+    globalThis.fetch = originalFetch;
+    Date.now = originalDateNow;
+  }
+});

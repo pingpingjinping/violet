@@ -27,10 +27,12 @@ type HitomiResolver struct {
 	ggURL          string
 	galleryBaseURL string
 
-	mu           sync.Mutex
-	scriptCache  string
-	scriptCached time.Time
-	cacheTTL     time.Duration
+	mu                 sync.Mutex
+	scriptCache        string
+	scriptCached       time.Time
+	cacheTTL           time.Duration
+	lastRefreshAttempt time.Time
+	refreshRetry       time.Duration
 }
 
 type resolvedImageList struct {
@@ -39,9 +41,10 @@ type resolvedImageList struct {
 
 func NewHitomiResolver(client *http.Client) *HitomiResolver {
 	return &HitomiResolver{
-		client:   client,
-		ggURL:    "https://ltn.gold-usergeneratedcontent.net/gg.js",
-		cacheTTL: 30 * time.Minute,
+		client:       client,
+		ggURL:        "https://ltn.gold-usergeneratedcontent.net/gg.js",
+		cacheTTL:     30 * time.Minute,
+		refreshRetry: time.Minute,
 	}
 }
 
@@ -103,14 +106,26 @@ func (r *HitomiResolver) ensureScript(ctx context.Context) (string, error) {
 		r.mu.Unlock()
 		return script, nil
 	}
+	staleScript := r.scriptCache
+	if staleScript != "" && time.Since(r.lastRefreshAttempt) < r.refreshRetry {
+		r.mu.Unlock()
+		return staleScript, nil
+	}
+	r.lastRefreshAttempt = time.Now()
 	r.mu.Unlock()
 
 	ggBody, err := fetchText(ctx, r.client, r.ggURL, map[string]string{"User-Agent": hitomiUserAgent})
 	if err != nil {
+		if staleScript != "" {
+			return staleScript, nil
+		}
 		return "", err
 	}
 	gg, err := parseGg(ggBody)
 	if err != nil {
+		if staleScript != "" {
+			return staleScript, nil
+		}
 		return "", err
 	}
 	script := strings.ReplaceAll(hitomiV3Model, "%%gg.m%", gg.M)

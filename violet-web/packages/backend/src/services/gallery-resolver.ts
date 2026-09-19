@@ -15,6 +15,8 @@ import { resolveEhMpvGalleryPages } from './eh-mpv.js';
 
 const BASE_DOMAIN = 'gold-usergeneratedcontent.net';
 const GG_JS_URL = `https://ltn.${BASE_DOMAIN}/gg.js`;
+const GG_CACHE_TTL_MS = 30 * 60 * 1000;
+const GG_REFRESH_RETRY_MS = 60 * 1000;
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -54,6 +56,7 @@ class EhAuthenticationError extends Error {}
 
 let routingCache: GgRouting | null = null;
 let latestUpdate = 0;
+let latestRefreshAttempt = 0;
 let routingRefresh: Promise<void> | null = null;
 const pendingGalleries = new Map<number, Promise<ImageList>>();
 
@@ -216,19 +219,25 @@ async function resolveEhGallery(id: number, metadata: EhGalleryMetadata): Promis
     : new Error(`Failed to resolve E-Hentai gallery ${id}`);
 }
 
+function parseGgRouting(ggText: string): GgRouting {
+  const b = ggText.match(/b:\s*(['"])([^'"]+)\1/)?.[2];
+  const oMatches = [...ggText.matchAll(/o\s*=\s*(\d+)/g)].map((m) => Number(m[1]));
+  if (!b || oMatches.length === 0 || oMatches.some((value) => !Number.isFinite(value))) {
+    throw new Error('Invalid Hitomi routing data');
+  }
+
+  return {
+    b,
+    mList: new Set([...ggText.matchAll(/case\s+(\d+):/g)].map((m) => m[1])),
+    o1: oMatches[0],
+    o2: oMatches[oMatches.length - 1],
+  };
+}
+
 async function tryRefreshV4(): Promise<boolean> {
   try {
-    const ggText = await fetchText(GG_JS_URL);
-    const b = ggText.match(/b:\s*'([^']+)'/)?.[1] ?? '';
-    const mList = new Set([...ggText.matchAll(/case (\d+):/g)].map((m) => m[1]));
-    const oMatches = [...ggText.matchAll(/o = (\d+)/g)].map((m) => Number(m[1]));
-
-    routingCache = {
-      b,
-      mList,
-      o1: oMatches[0] ?? 0,
-      o2: oMatches[oMatches.length - 1] ?? 1,
-    };
+    const nextRouting = parseGgRouting(await fetchText(GG_JS_URL));
+    routingCache = nextRouting;
     latestUpdate = Date.now();
     return true;
   } catch {
@@ -237,11 +246,14 @@ async function tryRefreshV4(): Promise<boolean> {
 }
 
 async function ensureScript(): Promise<void> {
-  if (routingCache && Date.now() - latestUpdate < 30 * 60 * 1000) return;
+  const now = Date.now();
+  if (routingCache && now - latestUpdate < GG_CACHE_TTL_MS) return;
+  if (routingCache && now - latestRefreshAttempt < GG_REFRESH_RETRY_MS) return;
 
   if (!routingRefresh) {
+    latestRefreshAttempt = now;
     routingRefresh = (async () => {
-      if (!(await tryRefreshV4())) {
+      if (!(await tryRefreshV4()) && !routingCache) {
         throw new Error('Failed to refresh Hitomi routing data');
       }
     })().finally(() => {
