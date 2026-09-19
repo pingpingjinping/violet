@@ -82,3 +82,6 @@ services:
   web:
     environment:
       HOST_SYNC_DIR: /content-data
+      VIOLET_SYNC_TOKEN_PATH: /sync-state/sync-token.txt
+    volumes:
+      - ./mobile-db/state:/sync-state:ro

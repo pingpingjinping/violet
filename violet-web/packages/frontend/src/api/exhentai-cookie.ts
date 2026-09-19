@@ -1,4 +1,4 @@
-import { api } from './client';
+import { api, syncTokenHeaders } from './client';
 
 export interface ExhentaiCookieStatus {
   configured: boolean;
@@ -11,11 +11,11 @@ export async function getExhentaiCookieStatus(): Promise<ExhentaiCookieStatus> {
 }
 
 export async function saveExhentaiCookie(cookie: string): Promise<ExhentaiCookieStatus> {
-  const { data } = await api.put<ExhentaiCookieStatus>('/settings/exhentai-cookie', { cookie });
+  const { data } = await api.put<ExhentaiCookieStatus>('/settings/exhentai-cookie', { cookie }, { headers: syncTokenHeaders() });
   return data;
 }
 
 export async function removeExhentaiCookie(): Promise<ExhentaiCookieStatus> {
-  const { data } = await api.delete<ExhentaiCookieStatus>('/settings/exhentai-cookie');
+  const { data } = await api.delete<ExhentaiCookieStatus>('/settings/exhentai-cookie', { headers: syncTokenHeaders() });
   return data;
 }
