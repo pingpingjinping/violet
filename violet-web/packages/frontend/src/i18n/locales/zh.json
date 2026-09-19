@@ -202,6 +202,17 @@
     }
   },
   "viewer": {
+    "errorRetry": "重试",
+    "errorBack": "返回",
+    "errors": {
+      "AUTH_REQUIRED": "来源网站要求登录。请在设置中检查E-Hentai/ExHentai的Cookie。",
+      "BANDWIDTH_LIMIT": "已达到图片带宽限制（509）。请稍后重试。",
+      "RATE_LIMITED": "请求次数已达限制。请稍后重试。",
+      "UNAVAILABLE": "作品或图片不存在或无法访问，可能已删除或受限。",
+      "NO_IMAGES": "来源网站未返回图片。",
+      "NETWORK_ERROR": "无法连接图片服务器。请检查连接并重试。",
+      "UPSTREAM_ERROR": "来源网站返回了异常响应。请稍后重试。"
+    },
     "noImages": "未找到该图库的图片。",
     "back": "返回",
     "settings": "设置",

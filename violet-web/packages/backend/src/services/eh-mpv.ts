@@ -1,6 +1,7 @@
 import { getContentDb } from './content-db.js';
 import { getEhCookie } from './eh-cookie-store.js';
 import { refreshEhCookieAfterAuthFailure } from './eh-auto-login.js';
+import { MediaError, httpMediaError, ehPageError, checkImageLimitUrl } from './media-error.js';
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -45,7 +46,9 @@ export interface EhMpvService {
   resolveGalleryPages: (gid: number, ehash: string) => Promise<ResolvedEhMpvGallery | null>;
 }
 
-class EhMpvAuthenticationError extends Error {}
+class EhMpvAuthenticationError extends MediaError {
+  constructor(_message: string) { super('AUTH_REQUIRED'); }
+}
 
 function getEhashFromDb(gid: number): string | null {
   const row = getContentDb()
@@ -72,7 +75,9 @@ function parseMpvHtml(html: string): { mpvkey: string; imgkeys: string[] } {
   const mpvkey = html.match(/var mpvkey\s*=\s*"([^"]+)"/)?.[1];
   const rawImagelist = html.match(/var imagelist\s*=\s*(\[[\s\S]*?\]);/)?.[1];
   if (!mpvkey || !rawImagelist) {
-    throw new EhMpvAuthenticationError('ExHentai MPV metadata was not present');
+    const error = ehPageError(html);
+    if (error.code === 'AUTH_REQUIRED') throw new EhMpvAuthenticationError(error.message);
+    throw error;
   }
 
   let parsed: unknown;
@@ -130,7 +135,8 @@ export function createEhMpvService(
     const redirected = response.status >= 300 && response.status < 400;
     if (!response.ok || redirected) {
       await response.body?.cancel();
-      throw new EhMpvAuthenticationError(`ExHentai MPV returned ${response.status}`);
+      if (redirected || response.status === 401) throw new EhMpvAuthenticationError('Login required');
+      throw httpMediaError(response.status);
     }
 
     const html = await response.text();
@@ -210,16 +216,19 @@ export function createEhMpvService(
     });
     if (!response.ok) {
       await response.body?.cancel();
-      throw new Error(`ExHentai image dispatch returned ${response.status}`);
+      if (response.status === 401) throw new EhMpvAuthenticationError('Login required');
+      throw httpMediaError(response.status);
     }
 
-    const payload = await response.json() as { i?: unknown; login?: unknown };
+    const payload = await response.json() as { i?: unknown; login?: unknown; error?: unknown };
     if (payload.login !== undefined) {
       throw new EhMpvAuthenticationError('ExHentai image dispatch requires login');
     }
     if (typeof payload.i !== 'string' || !payload.i.startsWith('http')) {
-      throw new Error('ExHentai image dispatch did not return a normal image URL');
+      throw ehPageError(typeof payload.error === 'string' ? payload.error : '');
     }
+
+    checkImageLimitUrl(payload.i);
 
     return { url: payload.i, referer: data.referer };
   }

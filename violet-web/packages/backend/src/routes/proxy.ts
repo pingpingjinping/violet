@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { proxyImage } from '../services/image-proxy.js';
 import { resolveGallery } from '../services/gallery-resolver.js';
+import { MediaError, publicMediaError } from '../services/media-error.js';
+import type { ErrorRequestHandler } from 'express';
 
 export const proxyRouter = Router();
 
@@ -51,7 +53,6 @@ proxyRouter.get('/image', async (req, res, next) => {
     next(err);
   }
 });
-
 proxyRouter.get('/gallery/:id', async (req, res, next) => {
   try {
     const id = parseInt(req.params.id);
@@ -86,8 +87,7 @@ proxyRouter.get('/thumbnail/:id', async (req, res, next) => {
     const thumbnailUrl = await resolveThumbnail(id);
 
     if (!thumbnailUrl) {
-      res.status(404).json({ error: 'No thumbnail found' });
-      return;
+      throw new MediaError('NO_IMAGES');
     }
 
 
@@ -107,3 +107,12 @@ proxyRouter.get('/thumbnail/:id', async (req, res, next) => {
     next(err);
   }
 });
+
+const mediaErrorHandler: ErrorRequestHandler = (error, _req, res, next) => {
+  if (res.headersSent || res.destroyed) { next(error); return; }
+  const payload = publicMediaError(error);
+  // These are upstream failures, not authentication failures of the Violet API.
+  res.setHeader('Cache-Control', 'no-store');
+  res.status(502).json(payload);
+};
+proxyRouter.use(mediaErrorHandler);
