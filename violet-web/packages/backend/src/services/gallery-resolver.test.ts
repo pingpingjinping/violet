@@ -58,3 +58,63 @@ test('resolves Hitomi image URLs with current gg.js routing', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test('uses MPV imagelist to build ExHentai page URLs before legacy gallery scraping', async () => {
+  const originalFetch = globalThis.fetch;
+  const oldCookiePath = process.env.EXHENTAI_COOKIE_PATH;
+  const oldCookie = process.env.EXHENTAI_COOKIE;
+  const galleryId = 987654321;
+  const ehash = 'gallery-token';
+  const mpvUrl = `https://exhentai.org/mpv/${galleryId}/${ehash}/`;
+  const counts = new Map<string, number>();
+
+  process.env.EXHENTAI_COOKIE_PATH = `/tmp/violet-gallery-resolver-test-${process.pid}`;
+  process.env.EXHENTAI_COOKIE = 'ipb_member_id=1; ipb_pass_hash=x; igneous=y';
+
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    counts.set(url, (counts.get(url) ?? 0) + 1);
+
+    if (url.includes(`/galleries/${galleryId}.js`)) {
+      return new Response('not found', { status: 404 });
+    }
+    if (url === mpvUrl) {
+      return new Response(
+        '<script>var mpvkey = "mpv-key"; var imagelist = [{"k":"img-a"},{"k":"img-b"}];</script>',
+      );
+    }
+    if (url.includes('/g/')) {
+      throw new Error('legacy /g/ scraper must not run when MPV succeeds');
+    }
+    if (url.endsWith('/gg.js')) {
+      return new Response("var gg = { b: 'cdn/', m: function(g) { var o = 0; return o; } };");
+    }
+
+    throw new Error(`Unexpected test URL: ${url}`);
+  };
+
+  try {
+    const result = await resolveGallery(galleryId, {
+      ehash,
+      files: 2,
+      thumbnail: 'https://example.test/thumb.jpg',
+    });
+
+    assert.deepEqual(result.urls, [
+      `https://exhentai.org/s/img-a/${galleryId}-1`,
+      `https://exhentai.org/s/img-b/${galleryId}-2`,
+    ]);
+    assert.deepEqual(result.bigThumbnails, ['https://example.test/thumb.jpg']);
+    assert.equal(counts.get(mpvUrl), 1);
+    assert.equal(
+      [...counts.keys()].some((url) => url.includes('/g/') && url !== mpvUrl),
+      false,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (oldCookiePath === undefined) delete process.env.EXHENTAI_COOKIE_PATH;
+    else process.env.EXHENTAI_COOKIE_PATH = oldCookiePath;
+    if (oldCookie === undefined) delete process.env.EXHENTAI_COOKIE;
+    else process.env.EXHENTAI_COOKIE = oldCookie;
+  }
+});
