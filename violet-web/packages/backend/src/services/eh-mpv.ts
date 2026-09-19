@@ -4,12 +4,12 @@ import { refreshEhCookieAfterAuthFailure } from './eh-auto-login.js';
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
-const MPV_CACHE_TTL = 60 * 60 * 1000;
+const MPV_CACHE_TTL = 10 * 60 * 1000;
 const MPV_REQUEST_TIMEOUT_MS = 15_000;
 const MPV_CACHE_LIMIT = 256;
 const EH_API_URL = 'https://s.exhentai.org/api.php';
 
-interface MvpGalleryData {
+interface MpvGalleryData {
   mpvkey: string;
   imgkeys: string[];
   referer: string;
@@ -87,15 +87,14 @@ export function createEhMpvResolver(
   overrides: Partial<EhMpvDependencies> = {},
 ): (url: string, signal?: AbortSignal) => Promise<ResolvedEhMpvImage | null> {
   const deps: EhMpvDependencies = {
-    fetchFn: (input, init) => globalThis.fetch(input, init),
-    getCookie: getEhCookie,
-    getEhash: getEhashFromDb,
-    refreshCookie: refreshEhCookieAfterAuthFailure,
-    now: () => Date.now(),
-    ...overrides,
+    fetchFn: overrides.fetchFn ?? ((input, init) => globalThis.fetch(input, init)),
+    getCookie: overrides.getCookie ?? getEhCookie,
+    getEhash: overrides.getEhash ?? getEhashFromDb,
+    refreshCookie: overrides.refreshCookie ?? refreshEhCookieAfterAuthFailure,
+    now: overrides.now ?? (() => Date.now()),
   };
-  const cache = new Map<number, MvpGalleryData>();
-  const pending = new Map<string, Promise<MvpGalleryData>>();
+  const cache = new Map<number, MpvGalleryData>();
+  const pending = new Map<string, Promise<MpvGalleryData>>();
 
   function pruneCache() {
     if (cache.size <= MPV_CACHE_LIMIT) return;
@@ -105,7 +104,7 @@ export function createEhMpvResolver(
     oldest.forEach(([gid]) => cache.delete(gid));
   }
 
-  async function fetchMpvOnce(gid: number, ehash: string, cookie: string): Promise<MvpGalleryData> {
+  async function fetchMpvOnce(gid: number, ehash: string, cookie: string): Promise<MpvGalleryData> {
     const referer = `https://exhentai.org/mpv/${gid}/${ehash}/`;
     const response = await deps.fetchFn(referer, {
       headers: {
@@ -134,7 +133,7 @@ export function createEhMpvResolver(
     };
   }
 
-  async function loadMpv(gid: number, ehash: string): Promise<MvpGalleryData> {
+  async function loadMpv(gid: number, ehash: string): Promise<MpvGalleryData> {
     const cached = cache.get(gid);
     if (cached && cached.ehash === ehash && deps.now() - cached.timestamp < MPV_CACHE_TTL) {
       return cached;
@@ -175,7 +174,7 @@ export function createEhMpvResolver(
 
   async function dispatchImage(
     pageInfo: EhImagePage,
-    data: MvpGalleryData,
+    data: MpvGalleryData,
     cookie: string,
     signal?: AbortSignal,
   ): Promise<ResolvedEhMpvImage> {
@@ -219,12 +218,14 @@ export function createEhMpvResolver(
     const pageInfo = parseEhImagePage(url);
     if (!pageInfo) return null;
 
-    const cookie = deps.getCookie();
-    if (!cookie) return null;
+    if (!deps.getCookie()) return null;
     const ehash = deps.getEhash(pageInfo.gid);
     if (!ehash) return null;
 
     const data = await loadMpv(pageInfo.gid, ehash);
+    const cookie = deps.getCookie();
+    if (!cookie) return null;
+
     try {
       return await dispatchImage(pageInfo, data, cookie, signal);
     } catch (error) {
