@@ -8,7 +8,8 @@ export function getProxyImageUrl(url: string, referer?: string): string {
 }
 
 export async function resolveGallery(id: number): Promise<ImageList> {
-  const { data } = await api.get<ImageList>(`/proxy/gallery/${id}`);
+  // Sequential Hitomi/ExH/EH attempts can exceed the default 30s API timeout.
+  const { data } = await api.get<ImageList>(`/proxy/gallery/${id}`, { timeout: 120_000 });
   return data;
 }
 

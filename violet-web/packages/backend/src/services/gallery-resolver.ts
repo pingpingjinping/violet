@@ -12,7 +12,7 @@ import { getContentDb } from './content-db.js';
 import { getEhCookie } from './eh-cookie-store.js';
 import { refreshEhCookieAfterAuthFailure } from './eh-auto-login.js';
 import { resolveEhMpvGalleryPages } from './eh-mpv.js';
-import { MediaError, httpMediaError, ehPageError, preferMediaError } from './media-error.js';
+import { MediaError, httpMediaError, ehPageError, preferMediaError, publicMediaError } from './media-error.js';
 
 const BASE_DOMAIN = 'gold-usergeneratedcontent.net';
 const GG_JS_URL = `https://ltn.${BASE_DOMAIN}/gg.js`;
@@ -64,12 +64,20 @@ let routingRefresh: Promise<void> | null = null;
 const pendingGalleries = new Map<number, Promise<ImageList>>();
 
 async function fetchText(url: string, headers?: Record<string, string>): Promise<string> {
-  const res = await fetch(url, {
-    headers: { 'User-Agent': USER_AGENT, ...headers },
-    signal: AbortSignal.timeout(EH_REQUEST_TIMEOUT_MS),
-  });
-  if (!res.ok) throw new UpstreamHttpError(url, res.status);
-  return res.text();
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': USER_AGENT, ...headers },
+      signal: AbortSignal.timeout(EH_REQUEST_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      await res.body?.cancel();
+      throw new UpstreamHttpError(url, res.status);
+    }
+    return await res.text();
+  } catch (error) {
+    if (publicMediaError(error).code === 'NETWORK_ERROR') throw new MediaError('NETWORK_ERROR');
+    throw error;
+  }
 }
 
 function getEhMetadata(id: number): EhGalleryMetadata | null {
@@ -156,11 +164,13 @@ async function fetchEhGalleryPage(url: string): Promise<string> {
   }
 }
 
-async function resolveEhGallery(id: number, metadata: EhGalleryMetadata): Promise<ImageList> {
+async function resolveEhGallery(id: number, metadata: EhGalleryMetadata, initialError: unknown): Promise<ImageList> {
   const expected = metadata.files && metadata.files > 0 ? metadata.files : null;
-  let lastError: unknown;
+  let lastError: unknown = initialError;
+  // One source order per resolution: ExH MPV -> ExH legacy -> EH.
+  const hasCookie = Boolean(getEhCookie());
 
-  if (getEhCookie()) {
+  if (hasCookie) {
     try {
       const mpvGallery = await resolveEhMpvGalleryPages(id, metadata.ehash);
       if (mpvGallery && mpvGallery.urls.length > 0) {
@@ -178,11 +188,11 @@ async function resolveEhGallery(id: number, metadata: EhGalleryMetadata): Promis
         };
       }
     } catch (error) {
-      lastError = error;
+      lastError = preferMediaError(lastError, error);
     }
   }
 
-  const candidates = getEhCookie()
+  const candidates = hasCookie
     ? ['https://exhentai.org', 'https://e-hentai.org']
     : ['https://e-hentai.org'];
 
@@ -207,6 +217,7 @@ async function resolveEhGallery(id: number, metadata: EhGalleryMetadata): Promis
       }
 
       if (imagePages.length === 0) throw new MediaError('NO_IMAGES');
+      if (expected && imagePages.length < expected) throw new MediaError('UPSTREAM_ERROR');
       const urls = expected ? imagePages.slice(0, expected) : imagePages;
       const fallbackThumbs = thumbnails.length > 0
         ? thumbnails.slice(0, urls.length)
@@ -241,14 +252,14 @@ function parseGgRouting(ggText: string): GgRouting {
   };
 }
 
-async function tryRefreshV4(): Promise<boolean> {
+async function refreshRouting(): Promise<void> {
   try {
     const nextRouting = parseGgRouting(await fetchText(GG_JS_URL));
     routingCache = nextRouting;
     latestUpdate = Date.now();
-    return true;
-  } catch {
-    return false;
+  } catch (error) {
+    if (routingCache) return; // Keep the last good routing data during an outage.
+    throw error instanceof MediaError ? error : new MediaError('UPSTREAM_ERROR');
   }
 }
 
@@ -259,11 +270,7 @@ async function ensureScript(): Promise<void> {
 
   if (!routingRefresh) {
     latestRefreshAttempt = now;
-    routingRefresh = (async () => {
-      if (!(await tryRefreshV4()) && !routingCache) {
-        throw new Error('Failed to refresh Hitomi routing data');
-      }
-    })().finally(() => {
+    routingRefresh = refreshRouting().finally(() => {
       routingRefresh = null;
     });
   }
@@ -279,7 +286,14 @@ async function getGalleryInfo(id: number): Promise<GalleryInfo> {
     .replace(/^var galleryinfo\s*=\s*/, '')
     .replace(/;\s*$/, '');
 
-  return JSON.parse(json) as GalleryInfo;
+  let parsed: GalleryInfo;
+  try { parsed = JSON.parse(json) as GalleryInfo; }
+  catch { throw new MediaError('UPSTREAM_ERROR'); }
+  if (!parsed || !Array.isArray(parsed.files)) throw new MediaError('UPSTREAM_ERROR');
+  if (parsed.files.some((file) => !file || (file.hash !== undefined && typeof file.hash !== 'string'))) {
+    throw new MediaError('UPSTREAM_ERROR');
+  }
+  return parsed;
 }
 
 function getHashShard(hash: string): string {
@@ -341,7 +355,7 @@ function getGalleryHeadersSync(): Record<string, string> {
 
 export async function resolveGallery(
   id: number,
-  fallbackMetadata?: EhGalleryMetadata,
+  fallbackMetadata?: EhGalleryMetadata | null,
 ): Promise<ImageList> {
   let pending = pendingGalleries.get(id);
   if (!pending) {
@@ -361,12 +375,11 @@ export async function resolveGallery(
 
 async function resolveGalleryUncached(
   id: number,
-  fallbackMetadata?: EhGalleryMetadata,
+  fallbackMetadata?: EhGalleryMetadata | null,
 ): Promise<ImageList> {
-  await ensureScript();
-  if (!routingCache) throw new Error('Hitomi routing data not available');
-
   try {
+    await ensureScript();
+    if (!routingCache) throw new MediaError('UPSTREAM_ERROR');
     const galleryInfo = await getGalleryInfo(id);
     const files = galleryInfo.files ?? [];
     if (!files.some((file) => file.hash)) throw new MediaError('NO_IMAGES');
@@ -376,10 +389,13 @@ async function resolveGalleryUncached(
       smallThumbnails: buildThumbnailUrls(files, routingCache, 'small'),
     };
   } catch (error) {
-    if (!(error instanceof UpstreamHttpError) || error.status !== 404) throw error;
-    const metadata = fallbackMetadata ?? getEhMetadata(id);
-    if (!metadata) throw error;
-    return resolveEhGallery(id, metadata);
+    // Only source failures should trigger fallback, not arbitrary programming errors.
+    if (!(error instanceof MediaError)) throw error;
+    let metadata: EhGalleryMetadata | null;
+    try { metadata = fallbackMetadata === undefined ? getEhMetadata(id) : fallbackMetadata; }
+    catch { throw error; } // No usable DB means no trustworthy fallback URL.
+    if (!metadata?.ehash.trim()) throw error;
+    return resolveEhGallery(id, { ...metadata, ehash: metadata.ehash.trim() }, error);
   }
 }
 

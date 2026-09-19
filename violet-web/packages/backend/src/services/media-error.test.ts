@@ -12,7 +12,7 @@ test('empty galleries and missing galleries return different codes', async () =>
     return new Response('var galleryinfo = {"files":[]};');
   };
   try {
-    await assert.rejects(resolveGallery(300001), { code: 'NO_IMAGES' });
+    await assert.rejects(resolveGallery(300001, null), { code: 'NO_IMAGES' });
     globalThis.fetch = async () => new Response('', { status: 404 });
     await assert.rejects(resolveGallery(300002, { ehash: 'token', files: 1, thumbnail: null }),
       { code: 'UNAVAILABLE' });
