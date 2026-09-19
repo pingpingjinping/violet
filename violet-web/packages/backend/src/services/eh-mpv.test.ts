@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createEhMpvResolver } from './eh-mpv.js';
+import { createEhMpvResolver, createEhMpvService } from './eh-mpv.js';
 
-test('MPV resolver caches gallery metadata and uses only the normal image URL', async () => {
+test('MPV gallery pages and image dispatch share cached metadata and use only the normal image URL', async () => {
   const mpvUrl = 'https://exhentai.org/mpv/123/gallery-token/';
   let mpvRequests = 0;
   const apiBodies: Array<Record<string, unknown>> = [];
 
-  const resolver = createEhMpvResolver({
+  const service = createEhMpvService({
     getCookie: () => 'ipb_member_id=1; ipb_pass_hash=x',
     getEhash: () => 'gallery-token',
     refreshCookie: async () => false,
@@ -32,8 +32,17 @@ test('MPV resolver caches gallery metadata and uses only the normal image URL', 
     },
   });
 
-  const first = await resolver('https://exhentai.org/s/a/123-1');
-  const second = await resolver('https://exhentai.org/s/b/123-2');
+  const gallery = await service.resolveGalleryPages(123, 'gallery-token');
+  assert.deepEqual(gallery, {
+    referer: mpvUrl,
+    urls: [
+      'https://exhentai.org/s/img-1/123-1',
+      'https://exhentai.org/s/img-2/123-2',
+    ],
+  });
+
+  const first = await service.resolveImage('https://exhentai.org/s/img-1/123-1');
+  const second = await service.resolveImage('https://exhentai.org/s/img-2/123-2');
 
   assert.deepEqual(first, {
     url: 'https://node.hath.network/page-1.webp',
@@ -43,7 +52,7 @@ test('MPV resolver caches gallery metadata and uses only the normal image URL', 
     url: 'https://node.hath.network/page-2.webp',
     referer: mpvUrl,
   });
-  assert.equal(mpvRequests, 1, 'same gallery should fetch MPV metadata only once');
+  assert.equal(mpvRequests, 1, 'gallery listing and image dispatch must share one MPV metadata request');
   assert.deepEqual(apiBodies, [
     { method: 'imagedispatch', gid: 123, page: 1, imgkey: 'img-1', mpvkey: 'mpv-key' },
     { method: 'imagedispatch', gid: 123, page: 2, imgkey: 'img-2', mpvkey: 'mpv-key' },
