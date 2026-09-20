@@ -17,11 +17,13 @@ import (
 )
 
 const (
-	defaultEHCookie     = ""
-	ehRequestDelay      = 1 * time.Second
-	ehLongDelay         = 120 * time.Second
-	ehLongDelayInterval = 100
-	expungedTag          = "expunged"
+	defaultEHCookie          = ""
+	ehRequestDelay           = 1 * time.Second
+	ehLongDelay              = 120 * time.Second
+	ehLongDelayInterval      = 100
+	expungedTag               = "expunged"
+	expungedMinID             = 4000000
+	expungedCheckpointPages   = 10
 )
 
 // EHArticle represents a parsed exhentai gallery entry.
@@ -197,13 +199,93 @@ func exHentaiBrowseURL(next int, expunged bool) string {
 	)
 }
 
+func filterExpungedMinID(articles []*EHArticle, minID int) []*EHArticle {
+	if minID <= 0 {
+		return articles
+	}
+	filtered := make([]*EHArticle, 0, len(articles))
+	for _, article := range articles {
+		if getEHID(article) >= minID {
+			filtered = append(filtered, article)
+		}
+	}
+	return filtered
+}
+
+func checkpointExpungedArticles(db *sql.DB, articles []*EHArticle) error {
+	if len(articles) == 0 {
+		return nil
+	}
+
+	byID := make(map[int]*EHArticle, len(articles))
+	ids := make([]int, 0, len(articles))
+	for _, article := range articles {
+		id := getEHID(article)
+		if id <= 0 {
+			continue
+		}
+		if _, exists := byID[id]; !exists {
+			ids = append(ids, id)
+		}
+		byID[id] = article
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	existing, err := getExistingByIDs(db, ids)
+	if err != nil {
+		return err
+	}
+
+	models := make([]*HitomiColumnModel, 0, len(ids))
+	for _, id := range ids {
+		article := byID[id]
+		if model, ok := existing[id]; ok {
+			mergeEHIntoModel(model, article)
+			models = append(models, model)
+		} else {
+			models = append(models, ehArticleToColumnModel(article))
+		}
+	}
+
+	toUpsert := diffWithExisting(db, models, ids)
+	if err := upsertArticles(db, toUpsert); err != nil {
+		return err
+	}
+	if err := maintainSearchIndexes(db, toUpsert); err != nil {
+		return err
+	}
+
+	log.Printf(
+		"[exhentai-expunged] checkpoint saved: seen=%d, upserted=%d",
+		len(ids),
+		len(toUpsert),
+	)
+	return nil
+}
+
 func crawlExHentai(client *http.Client, db *sql.DB, expunged bool) []*EHArticle {
 	var articles []*EHArticle
+	var pendingCheckpoint []*EHArticle
 	next := 0
 	consecutiveKnownPages := 0
 	label := "exhentai"
 	if expunged {
 		label = "exhentai-expunged"
+		log.Printf("[%s] backfill floor: Id >= %d", label, expungedMinID)
+	}
+
+	flushCheckpoint := func() bool {
+		if !expunged || len(pendingCheckpoint) == 0 {
+			return true
+		}
+		if err := checkpointExpungedArticles(db, pendingCheckpoint); err != nil {
+			log.Printf("[%s] checkpoint error: %v", label, err)
+			return false
+		}
+		pendingCheckpoint = nil
+		return true
 	}
 
 	for page := 0; ; page++ {
@@ -212,6 +294,7 @@ func crawlExHentai(client *http.Client, db *sql.DB, expunged bool) []*EHArticle 
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
 			log.Printf("[%s] page %d: request error: %v", label, page, err)
+			flushCheckpoint()
 			break
 		}
 		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
@@ -234,33 +317,43 @@ func crawlExHentai(client *http.Client, db *sql.DB, expunged bool) []*EHArticle 
 		parsed := parseExHentaiExtendedList(string(body))
 		if len(parsed) == 0 {
 			log.Printf("[%s] page %d: no results, stopping", label, page)
+			flushCheckpoint()
 			break
 		}
+
+		rawParsed := parsed
 		if expunged {
-			for _, article := range parsed {
+			for _, article := range rawParsed {
 				article.Expunged = true
+			}
+			parsed = filterExpungedMinID(rawParsed, expungedMinID)
+		}
+
+		if len(parsed) > 0 {
+			articles = append(articles, parsed...)
+			if expunged {
+				pendingCheckpoint = append(pendingCheckpoint, parsed...)
 			}
 		}
 
-		articles = append(articles, parsed...)
-
-		if len(parsed) != 25 {
-			log.Printf("[%s] page %d: got %d (expected 25)", label, page, len(parsed))
+		if len(rawParsed) != 25 {
+			log.Printf("[%s] page %d: got %d (expected 25)", label, page, len(rawParsed))
 		}
 
 		knownCount, err := countExistingEHIDs(db, parsed, expunged)
 		if err != nil {
 			log.Printf("[%s] page %d: existing-ID check error: %v", label, page, err)
+			flushCheckpoint()
 			break
 		}
 
-		if knownCount == len(parsed) {
+		if len(parsed) > 0 && knownCount == len(parsed) {
 			consecutiveKnownPages++
 		} else {
 			consecutiveKnownPages = 0
 		}
 
-		next = getEHID(parsed[len(parsed)-1])
+		next = getEHID(rawParsed[len(rawParsed)-1])
 
 		log.Printf(
 			"[%s] page %d, total: %d, next: %d, existing: %d/%d, overlap: %d/2",
@@ -273,7 +366,22 @@ func crawlExHentai(client *http.Client, db *sql.DB, expunged bool) []*EHArticle 
 			consecutiveKnownPages,
 		)
 
+		reachedFloor := expunged && next <= expungedMinID
+		if expunged && ((page+1)%expungedCheckpointPages == 0 || reachedFloor) {
+			if !flushCheckpoint() {
+				break
+			}
+		}
+
+		if reachedFloor {
+			log.Printf("[%s] reached backfill floor Id %d, stopping", label, expungedMinID)
+			break
+		}
+
 		if consecutiveKnownPages >= 2 {
+			if !flushCheckpoint() {
+				break
+			}
 			log.Printf("[%s] 2 consecutive fully-existing pages reached, stopping", label)
 			break
 		}
