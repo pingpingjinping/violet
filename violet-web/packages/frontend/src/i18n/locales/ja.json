@@ -282,5 +282,14 @@
     "downloadConfirm": "{{sources}}でダウンロードした記録があります。ウェブでもダウンロードしますか？",
     "recordOnly": "他の端末で完了したダウンロード記録を含みます。共有記録にローカルファイルは含まれません。",
     "resumeConfirm": "{{page}}ページまで読んだ記録があります。続きから読みますか？"
+  },
+  "pcDownload": {
+    "save": "PCに保存",
+    "preparing": "ZIPを準備中…",
+    "progress": "{{completed}}/{{total}}",
+    "cancel": "PCへの保存をキャンセル",
+    "ready": "ZIPをブラウザーに送信しました",
+    "error": "保存に失敗しました。再試行してください。",
+    "tooLarge": "ZIPがブラウザーの保存上限（1 GiB）を超えています。"
   }
 }

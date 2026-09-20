@@ -316,5 +316,14 @@
     "downloadConfirm": "This work has a completed download record on {{sources}}. Download it on the web too?",
     "recordOnly": "Includes downloads completed on other devices. Shared records do not provide local files.",
     "resumeConfirm": "Previously read through page {{page}}. Continue from that page?"
+  },
+  "pcDownload": {
+    "save": "Save to PC",
+    "preparing": "Preparing ZIP…",
+    "progress": "{{completed}}/{{total}}",
+    "cancel": "Cancel PC download",
+    "ready": "ZIP sent to browser",
+    "error": "Download failed. Please try again.",
+    "tooLarge": "ZIP exceeds the 1 GiB browser limit."
   }
 }

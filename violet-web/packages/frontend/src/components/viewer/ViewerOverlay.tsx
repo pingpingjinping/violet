@@ -1,3 +1,4 @@
+import { PcDownloadButton } from '../common/PcDownloadButton';
 import { useState, useMemo, useEffect, useCallback, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useViewerStore } from '../../stores/viewer-store';
@@ -195,6 +196,7 @@ export function ViewerOverlay({
             >
               ✂
             </button>
+            <PcDownloadButton galleryId={galleryId} compact />
             <div style={{ flex: 1 }} />
             <button
               className={styles.settingsBtn}

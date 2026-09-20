@@ -60,6 +60,9 @@ importers:
       axios:
         specifier: ^1.7.9
         version: 1.13.5
+      fflate:
+        specifier: ^0.8.2
+        version: 0.8.2
       graphology:
         specifier: ^0.26.0
         version: 0.26.0(graphology-types@0.24.8)

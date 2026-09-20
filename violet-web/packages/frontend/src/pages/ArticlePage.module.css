@@ -50,6 +50,7 @@
 }
 
 .actions {
+  flex-wrap: wrap;
   display: flex;
   gap: var(--spacing-sm);
   margin-top: var(--spacing-md);

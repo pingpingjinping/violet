@@ -1,3 +1,4 @@
+import { PcDownloadButton } from '../components/common/PcDownloadButton';
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
@@ -80,6 +81,7 @@ export function ArticlePage() {
           </div>
 
           <div className={styles.actions}>
+            <PcDownloadButton galleryId={article.Id} />
             <button
               className={styles.readBtn}
               onClick={() => navigate(`/viewer/${article.Id}`)}
