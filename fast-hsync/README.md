@@ -85,6 +85,7 @@ go build -o fast-hsync.exe .
 - `Class`
 - ExHentai에만 있는 항목(`ExistOnHitomi = 0`)
 - expunged 항목에는 기존 `Tags` 컬럼에 `expunged` 표시를 추가합니다. 별도 DB 스키마 마이그레이션은 필요하지 않습니다.
+- expunged 초기 백필은 `Id >= 4,000,000`까지만 수집하며, 10페이지(최대 250개)마다 DB/FTS에 체크포인트를 저장합니다. 중간 재시작 시 이미 저장된 최신 페이지를 만나 빠르게 이어집니다.
 
 ExHentai 쿠키는 `COOKIE` 환경변수에서 읽습니다.
 
