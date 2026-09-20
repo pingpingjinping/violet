@@ -106,6 +106,47 @@ func TestSyncStateRoundTrip(t *testing.T) {
 	}
 }
 
+func TestGetExpungedBackfillStart(t *testing.T) {
+	db, err := openDB(t.TempDir() + "/backfill-start.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := createTable(db); err != nil {
+		t.Fatal(err)
+	}
+
+	complete, next, err := getExpungedBackfillStart(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if complete || next != 0 {
+		t.Fatalf("fresh state = complete:%v next:%d, want false/0", complete, next)
+	}
+
+	if err := setSyncState(db, expungedPreviousBackfillStateKey, "complete"); err != nil {
+		t.Fatal(err)
+	}
+	complete, next, err = getExpungedBackfillStart(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if complete || next != expungedPreviousMinID {
+		t.Fatalf("previous complete = complete:%v next:%d, want false/%d", complete, next, expungedPreviousMinID)
+	}
+
+	if err := setSyncState(db, expungedBackfillStateKey, "complete"); err != nil {
+		t.Fatal(err)
+	}
+	complete, next, err = getExpungedBackfillStart(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !complete || next != 0 {
+		t.Fatalf("current complete = complete:%v next:%d, want true/0", complete, next)
+	}
+}
+
 func TestFilterExpungedMinID(t *testing.T) {
 	articles := []*EHArticle{
 		{URL: "https://exhentai.org/g/3800100/a/"},
