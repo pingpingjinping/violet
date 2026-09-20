@@ -7,6 +7,8 @@
 import type { SearchDateRange } from '@violet-web/shared';
 import { normalizedPublishedSql, parseDateBounds } from './publication-date.js';
 
+const visibleGalleryCondition = "(ExistOnHitomi=1 OR Tags LIKE '%|expunged|%')";
+
 export function translateQuery(
   query: string,
   page: number,
@@ -43,7 +45,7 @@ export function translateQueryCondition(
   }
 
   if (query === '') {
-    return 'ExistOnHitomi=1';
+    return visibleGalleryCondition;
   }
 
   const tokens = splitTokens(query)
@@ -53,7 +55,7 @@ export function translateQueryCondition(
   const where = translator.parseExpression();
   const negFts = translator.getNegFtsClause();
 
-  return `${where}${negFts} AND ExistOnHitomi=1`;
+  return `${where}${negFts} AND ${visibleGalleryCondition}`;
 }
 
 function splitTokens(input: string): string[] {
