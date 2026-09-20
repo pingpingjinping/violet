@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
@@ -21,6 +21,11 @@ import { updateDateParams } from '../components/search/date-range-model';
 import { buildLocalDateDistribution, filterItemsByDateRange } from '../components/search/local-date-range-model';
 
 const PAGE_SIZE = 30;
+
+// A browser back-navigation restores the same React Router location key.
+// Remember keys seen in this page lifetime so returning from the viewer can
+// reuse the existing history cache without immediately reordering the list.
+const visitedHistoryLocationKeys = new Set<string>();
 
 export function HistoryPage() {
   const { t } = useTranslation();
@@ -45,6 +50,12 @@ export function HistoryPage() {
     [page, searchParams, setSearchParams],
   );
   const location = useLocation();
+  const isHistoryReturn = visitedHistoryLocationKeys.has(location.key);
+
+  useEffect(() => {
+    visitedHistoryLocationKeys.add(location.key);
+  }, [location.key]);
+
   const visibleKey = `history-visible:${location.key}`;
   const readVisibleCount = () => {
     try {
@@ -61,6 +72,7 @@ export function HistoryPage() {
   const { data: historyEntries, isLoading: idsLoading } = useQuery({
     queryKey: ['readHistory', 'ids'],
     queryFn: getHistoryEntries,
+    refetchOnMount: !isHistoryReturn,
   });
   const articleIds = useMemo(
     () => historyEntries && historyArticleIds(historyEntries),

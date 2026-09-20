@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Download, BookOpen } from 'lucide-react';
@@ -45,6 +46,11 @@ export function ArticleInfoDialog({ article, onClose }: ArticleInfoDialogProps) 
   const series = parsePipeTags(article.Series);
   const characters = parsePipeTags(article.Characters);
   const language = article.Language ?? '';
+  const source = article.ExistOnHitomi === 1
+    ? 'Hitomi'
+    : article.EHash?.trim()
+      ? 'ExHentai'
+      : null;
   const tags = parseTagTuples(article.Tags)
     .filter((t) => ['female', 'male', 'tag', ''].includes(t.namespace))
     .sort((a, b) => {
@@ -57,6 +63,14 @@ export function ArticleInfoDialog({ article, onClose }: ArticleInfoDialogProps) 
       }
       return a.tag.localeCompare(b.tag);
     });
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const handleBookmarkClick = () => {
     toggleBookmark.mutate({ articleId: String(article.Id), isBookmarked: !!isBookmarked });
@@ -98,7 +112,10 @@ export function ArticleInfoDialog({ article, onClose }: ArticleInfoDialogProps) 
 
           <div className={styles.details}>
             <div className={styles.title}>{article.Title}</div>
-            <span className={styles.articleId}>#{article.Id}</span>
+            <div className={styles.articleMetaLine}>
+              <span className={styles.articleId}>#{article.Id}</span>
+              {source && <span className={styles.sourceBadge}>{source}</span>}
+            </div>
 
             <div className={styles.meta}>
               {artists.length > 0 && (
