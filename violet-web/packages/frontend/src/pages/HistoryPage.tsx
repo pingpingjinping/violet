@@ -1,9 +1,10 @@
-import { useState, useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useNavigate, useSearchParams, useLocation } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { getHistoryEntries } from '../api/history';
 import { useAllArticles } from '../hooks/useAllArticles';
+import { historyArticleIds, orderHistoryArticles } from './history-articles';
 import { LocalSearchSection } from '../components/search/LocalSearchSection';
 import { SearchResultGrid } from '../components/search/SearchResultGrid';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
@@ -20,6 +21,11 @@ import { updateDateParams } from '../components/search/date-range-model';
 import { buildLocalDateDistribution, filterItemsByDateRange } from '../components/search/local-date-range-model';
 
 const PAGE_SIZE = 30;
+
+// A browser back-navigation restores the same React Router location key.
+// Remember keys seen in this page lifetime so returning from the viewer can
+// reuse the existing history cache without immediately reordering the list.
+const visitedHistoryLocationKeys = new Set<string>();
 
 export function HistoryPage() {
   const { t } = useTranslation();
@@ -43,45 +49,83 @@ export function HistoryPage() {
     },
     [page, searchParams, setSearchParams],
   );
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const location = useLocation();
+  const isHistoryReturn = visitedHistoryLocationKeys.has(location.key);
+
+  useEffect(() => {
+    visitedHistoryLocationKeys.add(location.key);
+  }, [location.key]);
+
+  const visibleKey = `history-visible:${location.key}`;
+  const readVisibleCount = () => {
+    try {
+      const value = Number(sessionStorage.getItem(visibleKey));
+      return Number.isSafeInteger(value) && value >= PAGE_SIZE ? value : PAGE_SIZE;
+    } catch { return PAGE_SIZE; }
+  };
+  const [visibleState, setVisibleState] = useState(() => ({
+    key: visibleKey, count: readVisibleCount(),
+  }));
+  const visibleCount = visibleState.key === visibleKey ? visibleState.count : readVisibleCount();
 
   // Fetch all history article IDs
   const { data: historyEntries, isLoading: idsLoading } = useQuery({
     queryKey: ['readHistory', 'ids'],
     queryFn: getHistoryEntries,
+    refetchOnMount: !isHistoryReturn,
   });
-  const articleIds = historyEntries?.map((entry) => entry.articleId);
+  const articleIds = useMemo(
+    () => historyEntries && historyArticleIds(historyEntries),
+    [historyEntries],
+  );
 
   // Fetch all articles in bulk
-  const { data: allArticles, isLoading: articlesLoading } = useAllArticles(
-    'readHistory',
+  const { data: articleDetails, isLoading: articlesLoading } = useAllArticles(
+    'historyArticleDetails',
     articleIds,
   );
 
-  const isLoading = idsLoading || articlesLoading;
+  // Reading changes dates/order, not article metadata. Keep its cache independent
+  // of readHistory invalidation, then apply the current reading order locally.
+  const allArticles = useMemo(
+    () => orderHistoryArticles(historyEntries ?? [], articleDetails ?? []),
+    [historyEntries, articleDetails],
+  );
+  const isLoading = idsLoading || (!!articleIds?.length && articlesLoading);
 
   // Tag summary from ALL articles
   const tagSummary = useArticleTagSummary(allArticles ?? []);
 
   // Filter articles based on search query
   const searchFilteredArticles = useLocalArticleSearch(allArticles ?? []);
-  const historyDateByArticle = new Map(historyEntries?.map((entry) => [entry.articleId, entry.date]));
-  const dateDistribution = buildLocalDateDistribution(
-    searchFilteredArticles.map((article) => historyDateByArticle.get(String(article.Id)) ?? ''),
+  const historyDateByArticle = useMemo(
+    () => new Map(historyEntries?.map((entry) => [entry.articleId, entry.date])),
+    [historyEntries],
   );
-  const filteredArticles = filterItemsByDateRange(
-    searchFilteredArticles,
-    (article) => historyDateByArticle.get(String(article.Id)) ?? '',
-    from,
-    to,
+  const dateDistribution = useMemo(
+    () => buildLocalDateDistribution(
+      searchFilteredArticles.map((article) => historyDateByArticle.get(String(article.Id)) ?? ''),
+    ),
+    [searchFilteredArticles, historyDateByArticle],
+  );
+  const filteredArticles = useMemo(
+    () => filterItemsByDateRange(
+      searchFilteredArticles,
+      (article) => historyDateByArticle.get(String(article.Id)) ?? '',
+      from,
+      to,
+    ),
+    [searchFilteredArticles, historyDateByArticle, from, to],
   );
 
   // Paginate/slice filtered results for display
   const totalPages = Math.ceil(filteredArticles.length / PAGE_SIZE);
-  const displayArticles =
-    scrollMode === 'infinite'
+  const displayArticles = useMemo(
+    () => scrollMode === 'infinite'
       ? filteredArticles.slice(0, visibleCount)
-      : filteredArticles.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+      : filteredArticles.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+    [filteredArticles, scrollMode, visibleCount, page],
+  );
 
   const keyboardSelectedId = useResultGridKeyboard(
     displayArticles,
@@ -102,8 +146,10 @@ export function HistoryPage() {
     });
 
   const handleLoadMore = useCallback(() => {
-    setVisibleCount((prev) => prev + PAGE_SIZE);
-  }, []);
+    const count = visibleCount + PAGE_SIZE;
+    try { sessionStorage.setItem(visibleKey, String(count)); } catch { /* Optional restoration. */ }
+    setVisibleState({ key: visibleKey, count });
+  }, [visibleCount, visibleKey]);
 
   const hasMore = scrollMode === 'infinite' && visibleCount < filteredArticles.length;
 
