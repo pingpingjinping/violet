@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Download, BookOpen } from 'lucide-react';
@@ -39,6 +40,23 @@ export function ArticleInfoDialog({ article, onClose }: ArticleInfoDialogProps) 
   const { translateTag } = useTagTranslation();
   const tagCounts = useTagCounts();
   const { data: summary } = useArticleSummary(article.Id);
+
+  const source = article.ExistOnHitomi === 1
+    ? 'Hitomi'
+    : article.EHash?.trim()
+      ? 'ExHentai'
+      : null;
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const artists = parsePipeTags(article.Artists);
   const groups = parsePipeTags(article.Groups);
@@ -98,7 +116,10 @@ export function ArticleInfoDialog({ article, onClose }: ArticleInfoDialogProps) 
 
           <div className={styles.details}>
             <div className={styles.title}>{article.Title}</div>
-            <span className={styles.articleId}>#{article.Id}</span>
+            <div className={styles.articleMetaLine}>
+              <span className={styles.articleId}>#{article.Id}</span>
+              {source && <span className={styles.sourceBadge}>{source}</span>}
+            </div>
 
             <div className={styles.meta}>
               {artists.length > 0 && (

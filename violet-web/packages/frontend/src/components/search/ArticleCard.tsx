@@ -63,6 +63,11 @@ export const ArticleCard = memo(function ArticleCard({ article, viewMode = 'grid
 
   const artists = parsePipeTags(article.Artists);
   const language = article.Language ?? '';
+  const source = article.ExistOnHitomi === 1
+    ? 'Hitomi'
+    : article.EHash?.trim()
+      ? 'ExHentai'
+      : null;
 
   const handleDownloadClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -217,10 +222,13 @@ export const ArticleCard = memo(function ArticleCard({ article, viewMode = 'grid
         <div className={styles.info}>
           <div className={styles.title}>{article.Title}</div>
           <div className={styles.meta}>
-            <span
-              className={`${styles.articleId} ${styles.clickable}`}
-              onClick={(e) => { e.stopPropagation(); setShowInfoDialog(true); }}
-            >#{article.Id}</span>
+            <span className={styles.articleIdentity}>
+              <span
+                className={`${styles.articleId} ${styles.clickable}`}
+                onClick={(e) => { e.stopPropagation(); setShowInfoDialog(true); }}
+              >#{article.Id}</span>
+              {source && <span className={styles.sourceBadge}>{source}</span>}
+            </span>
             {artists.length > 0 && (
               <span>
                 {isDetail && <span className={styles.detailLabel}>Artist</span>}
