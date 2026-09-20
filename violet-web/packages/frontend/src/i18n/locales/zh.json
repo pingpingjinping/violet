@@ -282,5 +282,14 @@
     "downloadConfirm": "{{sources}}中已有下载完成记录。仍要在网页下载吗？",
     "recordOnly": "包含其他设备上已完成的下载记录。共享记录不包含本机文件。",
     "resumeConfirm": "之前已读到第{{page}}页。要继续阅读吗？"
+  },
+  "pcDownload": {
+    "save": "保存到电脑",
+    "preparing": "正在准备 ZIP…",
+    "progress": "{{completed}}/{{total}}",
+    "cancel": "取消保存到电脑",
+    "ready": "ZIP 已发送到浏览器",
+    "error": "保存失败，请重试。",
+    "tooLarge": "ZIP 超过浏览器保存上限（1 GiB）。"
   }
 }

@@ -1,0 +1,25 @@
+.wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  flex-wrap: wrap;
+}
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  min-height: 36px;
+  padding: var(--spacing-sm);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+  cursor: pointer;
+}
+.button:hover { background: var(--color-bg-hover); }
+.button:disabled { opacity: 0.7; cursor: default; }
+.result { font-size: 12px; max-width: 240px; }
+.viewer { margin-left: 8px; color: white; min-width: 0; }
+.viewer .button { background: rgba(0, 0, 0, 0.6); color: white; border-color: rgba(255, 255, 255, 0.3); }
+.viewer .result { max-width: 160px; }

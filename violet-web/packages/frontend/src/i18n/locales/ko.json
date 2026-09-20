@@ -322,5 +322,14 @@
     "downloadConfirm": "{{sources}}에서 다운로드한 기록이 있습니다. 웹에서도 다운로드할까요?",
     "recordOnly": "다른 기기에서 완료한 다운로드 기록도 포함됩니다. 공유 기록에는 이 기기의 파일이 없습니다.",
     "resumeConfirm": "{{page}}페이지까지 읽은 기록이 있습니다. 이어서 볼까요?"
+  },
+  "pcDownload": {
+    "save": "PC에 저장",
+    "preparing": "ZIP 준비 중…",
+    "progress": "{{completed}}/{{total}}",
+    "cancel": "PC 저장 취소",
+    "ready": "브라우저로 ZIP 전달 완료",
+    "error": "저장에 실패했어요. 다시 시도해 주세요.",
+    "tooLarge": "ZIP이 브라우저 저장 한도(1 GiB)를 초과했어요."
   }
 }
