@@ -63,6 +63,49 @@ func TestSetPipeTag(t *testing.T) {
 	}
 }
 
+func TestShouldStopOnKnownPages(t *testing.T) {
+	if shouldStopOnKnownPages(true, false, 2) {
+		t.Fatal("incomplete expunged backfill must ignore the 2-page known stop")
+	}
+	if !shouldStopOnKnownPages(true, true, 2) {
+		t.Fatal("completed expunged backfill should stop after 2 known pages")
+	}
+	if !shouldStopOnKnownPages(false, false, 2) {
+		t.Fatal("normal ExH crawl should keep the 2-page known stop")
+	}
+	if shouldStopOnKnownPages(true, true, 1) {
+		t.Fatal("one known page must not stop")
+	}
+}
+
+func TestSyncStateRoundTrip(t *testing.T) {
+	db, err := openDB(t.TempDir() + "/state.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := createTable(db); err != nil {
+		t.Fatal(err)
+	}
+
+	if value, found, err := getSyncState(db, expungedBackfillStateKey); err != nil {
+		t.Fatal(err)
+	} else if found || value != "" {
+		t.Fatalf("unexpected initial state: found=%v value=%q", found, value)
+	}
+
+	if err := setSyncState(db, expungedBackfillStateKey, "complete"); err != nil {
+		t.Fatal(err)
+	}
+	value, found, err := getSyncState(db, expungedBackfillStateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found || value != "complete" {
+		t.Fatalf("state round trip failed: found=%v value=%q", found, value)
+	}
+}
+
 func TestFilterExpungedMinID(t *testing.T) {
 	articles := []*EHArticle{
 		{URL: "https://exhentai.org/g/4000100/a/"},

@@ -24,6 +24,7 @@ const (
 	expungedTag               = "expunged"
 	expungedMinID             = 4000000
 	expungedCheckpointPages   = 10
+	expungedBackfillStateKey  = "exhentai_expunged_backfill_4000000"
 )
 
 // EHArticle represents a parsed exhentai gallery entry.
@@ -212,6 +213,13 @@ func filterExpungedMinID(articles []*EHArticle, minID int) []*EHArticle {
 	return filtered
 }
 
+func shouldStopOnKnownPages(expunged, backfillComplete bool, consecutiveKnownPages int) bool {
+	if consecutiveKnownPages < 2 {
+		return false
+	}
+	return !expunged || backfillComplete
+}
+
 func checkpointExpungedArticles(db *sql.DB, articles []*EHArticle) error {
 	if len(articles) == 0 {
 		return nil
@@ -270,10 +278,21 @@ func crawlExHentai(client *http.Client, db *sql.DB, expunged bool) []*EHArticle 
 	var pendingCheckpoint []*EHArticle
 	next := 0
 	consecutiveKnownPages := 0
+	backfillComplete := true
 	label := "exhentai"
 	if expunged {
 		label = "exhentai-expunged"
-		log.Printf("[%s] backfill floor: Id >= %d", label, expungedMinID)
+		state, found, err := getSyncState(db, expungedBackfillStateKey)
+		if err != nil {
+			log.Printf("[%s] failed to read backfill state: %v", label, err)
+			return articles
+		}
+		backfillComplete = found && state == "complete"
+		if backfillComplete {
+			log.Printf("[%s] backfill complete; using 2-page overlap stop", label)
+		} else {
+			log.Printf("[%s] backfill in progress: Id >= %d; known-page stop disabled until floor is reached", label, expungedMinID)
+		}
 	}
 
 	flushCheckpoint := func() bool {
@@ -374,11 +393,16 @@ func crawlExHentai(client *http.Client, db *sql.DB, expunged bool) []*EHArticle 
 		}
 
 		if reachedFloor {
-			log.Printf("[%s] reached backfill floor Id %d, stopping", label, expungedMinID)
+			if err := setSyncState(db, expungedBackfillStateKey, "complete"); err != nil {
+				log.Printf("[%s] failed to save backfill-complete state: %v", label, err)
+				break
+			}
+			backfillComplete = true
+			log.Printf("[%s] reached backfill floor Id %d; backfill marked complete", label, expungedMinID)
 			break
 		}
 
-		if consecutiveKnownPages >= 2 {
+		if shouldStopOnKnownPages(expunged, backfillComplete, consecutiveKnownPages) {
 			if !flushCheckpoint() {
 				break
 			}
