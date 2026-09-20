@@ -63,6 +63,91 @@ func TestSetPipeTag(t *testing.T) {
 	}
 }
 
+func TestFilterExpungedMinID(t *testing.T) {
+	articles := []*EHArticle{
+		{URL: "https://exhentai.org/g/4000100/a/"},
+		{URL: "https://exhentai.org/g/4000000/b/"},
+		{URL: "https://exhentai.org/g/3999999/c/"},
+	}
+	filtered := filterExpungedMinID(articles, expungedMinID)
+	if len(filtered) != 2 {
+		t.Fatalf("filtered len = %d, want 2", len(filtered))
+	}
+	if getEHID(filtered[0]) != 4000100 || getEHID(filtered[1]) != 4000000 {
+		t.Fatalf("unexpected filtered IDs: %d, %d", getEHID(filtered[0]), getEHID(filtered[1]))
+	}
+}
+
+func TestCheckpointExpungedArticlesMergesExistingID(t *testing.T) {
+	db, err := openDB(t.TempDir() + "/checkpoint.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := createTable(db); err != nil {
+		t.Fatal(err)
+	}
+
+	existing := &HitomiColumnModel{
+		ID:            4000010,
+		Title:         "Hitomi copy",
+		Artists:       "|artist1|",
+		Language:      "korean",
+		Tags:          "|female:loli|",
+		ExistOnHitomi: 1,
+	}
+	if err := upsertArticles(db, []*HitomiColumnModel{existing}); err != nil {
+		t.Fatal(err)
+	}
+
+	batch := []*EHArticle{
+		{
+			URL:      "https://exhentai.org/g/4000010/hash1/",
+			Title:    "Existing EH copy",
+			Expunged: true,
+		},
+		{
+			URL:      "https://exhentai.org/g/4000020/hash2/",
+			Title:    "New expunged",
+			Expunged: true,
+			Descripts: map[string][]string{
+				"language": {"korean"},
+			},
+		},
+	}
+	if err := checkpointExpungedArticles(db, batch); err != nil {
+		t.Fatal(err)
+	}
+
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM HitomiColumnModel").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Fatalf("row count = %d, want 2", count)
+	}
+
+	rows, err := getExistingByIDs(db, []int{4000010, 4000020})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows[4000010].Title != "Hitomi copy" {
+		t.Fatalf("existing title was replaced: %q", rows[4000010].Title)
+	}
+	if rows[4000010].ExistOnHitomi != 1 {
+		t.Fatalf("existing Hitomi flag changed: %d", rows[4000010].ExistOnHitomi)
+	}
+	if !strings.Contains(rows[4000010].Tags, "|expunged|") {
+		t.Fatalf("existing row missing expunged tag: %q", rows[4000010].Tags)
+	}
+	if rows[4000020].ExistOnHitomi != 0 {
+		t.Fatalf("new ExH-only row flag = %d, want 0", rows[4000020].ExistOnHitomi)
+	}
+	if !strings.Contains(rows[4000020].Tags, "|expunged|") {
+		t.Fatalf("new row missing expunged tag: %q", rows[4000020].Tags)
+	}
+}
+
 
 func TestParseExHentaiExtendedList(t *testing.T) {
 	html := `<html><body>
