@@ -21,6 +21,7 @@ const (
 	ehRequestDelay      = 1 * time.Second
 	ehLongDelay         = 120 * time.Second
 	ehLongDelayInterval = 100
+	expungedTag          = "expunged"
 )
 
 // EHArticle represents a parsed exhentai gallery entry.
@@ -33,6 +34,7 @@ type EHArticle struct {
 	Files     string
 	Type      string
 	Descripts map[string][]string
+	Expunged  bool
 }
 
 func getEHID(art *EHArticle) int {
@@ -108,7 +110,7 @@ func newExHentaiClient(cookie string) (*http.Client, error) {
 	return client, nil
 }
 
-func countExistingEHIDs(db *sql.DB, articles []*EHArticle) (int, error) {
+func countExistingEHIDs(db *sql.DB, articles []*EHArticle, expunged bool) (int, error) {
 	ids := make([]int, 0, len(articles))
 	args := make([]interface{}, 0, len(articles))
 	placeholders := make([]string, 0, len(articles))
@@ -127,13 +129,20 @@ func countExistingEHIDs(db *sql.DB, articles []*EHArticle) (int, error) {
 		return 0, nil
 	}
 
+	knownCondition := "EHash IS NOT NULL AND TRIM(EHash) <> ''"
+	if expunged {
+		// The first expunged crawl must keep walking past rows that merely have
+		// an EHash from an older normal crawl. Stop only after the expunged
+		// marker itself has already been stored.
+		knownCondition = "Tags LIKE '%|expunged|%'"
+	}
+
 	query := fmt.Sprintf(`
 		SELECT COUNT(*)
 		FROM HitomiColumnModel
 		WHERE Id IN (%s)
-		  AND EHash IS NOT NULL
-		  AND TRIM(EHash) <> ''
-	`, strings.Join(placeholders, ","))
+		  AND %s
+	`, strings.Join(placeholders, ","), knownCondition)
 
 	var count int
 	if err := db.QueryRow(query, args...).Scan(&count); err != nil {
@@ -152,9 +161,12 @@ func syncExHentai(cookie string, db *sql.DB) []*EHArticle {
 		return nil
 	}
 
-	articles := crawlExHentai(client, db)
+	normal := crawlExHentai(client, db, false)
+	expunged := crawlExHentai(client, db, true)
+	articles := append(normal, expunged...)
 
-	// Deduplicate by URL
+	// Deduplicate by URL. Browse Expunged Galleries is an expunged-only search,
+	// so overlap should normally be empty, but keep this defensive anyway.
 	seen := make(map[string]bool)
 	deduped := make([]*EHArticle, 0, len(articles))
 	for _, a := range articles {
@@ -164,24 +176,36 @@ func syncExHentai(cookie string, db *sql.DB) []*EHArticle {
 		}
 	}
 
-	log.Printf("ExHentai sync done: %d total, %d after dedup", len(articles), len(deduped))
+	log.Printf(
+		"ExHentai sync done: normal=%d, expunged=%d, %d after dedup",
+		len(normal),
+		len(expunged),
+		len(deduped),
+	)
 	return deduped
 }
 
-func crawlExHentai(client *http.Client, db *sql.DB) []*EHArticle {
+func crawlExHentai(client *http.Client, db *sql.DB, expunged bool) []*EHArticle {
 	var articles []*EHArticle
 	next := 0
 	consecutiveKnownPages := 0
+	label := "exhentai"
+	expungedParam := ""
+	if expunged {
+		label = "exhentai-expunged"
+		expungedParam = "&f_sh=on"
+	}
 
 	for page := 0; ; page++ {
 		url := fmt.Sprintf(
-			"https://exhentai.org/?next=%d&f_doujinshi=on&f_manga=on&f_artistcg=on&f_gamecg=on&f_cats=0&f_sname=on&f_stags=on&advsearch=1&f_sname=on&f_stags=on&f_sdesc=on",
+			"https://exhentai.org/?next=%d&f_search=&f_doujinshi=on&f_manga=on&f_artistcg=on&f_gamecg=on&f_cats=0&f_sname=on&f_stags=on&advsearch=1&f_sdesc=on%s",
 			next,
+			expungedParam,
 		)
 
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
-			log.Printf("[exhentai] page %d: request error: %v", page, err)
+			log.Printf("[%s] page %d: request error: %v", label, page, err)
 			break
 		}
 		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
@@ -189,7 +213,7 @@ func crawlExHentai(client *http.Client, db *sql.DB) []*EHArticle {
 
 		resp, err := client.Do(req)
 		if err != nil {
-			log.Printf("[exhentai] page %d: fetch error: %v", page, err)
+			log.Printf("[%s] page %d: fetch error: %v", label, page, err)
 			time.Sleep(ehRequestDelay)
 			continue
 		}
@@ -197,25 +221,30 @@ func crawlExHentai(client *http.Client, db *sql.DB) []*EHArticle {
 		body, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if err != nil {
-			log.Printf("[exhentai] page %d: read error: %v", page, err)
+			log.Printf("[%s] page %d: read error: %v", label, page, err)
 			continue
 		}
 
 		parsed := parseExHentaiExtendedList(string(body))
 		if len(parsed) == 0 {
-			log.Printf("[exhentai] page %d: no results, stopping", page)
+			log.Printf("[%s] page %d: no results, stopping", label, page)
 			break
+		}
+		if expunged {
+			for _, article := range parsed {
+				article.Expunged = true
+			}
 		}
 
 		articles = append(articles, parsed...)
 
 		if len(parsed) != 25 {
-			log.Printf("[exhentai] page %d: got %d (expected 25)", page, len(parsed))
+			log.Printf("[%s] page %d: got %d (expected 25)", label, page, len(parsed))
 		}
 
-		knownCount, err := countExistingEHIDs(db, parsed)
+		knownCount, err := countExistingEHIDs(db, parsed, expunged)
 		if err != nil {
-			log.Printf("[exhentai] page %d: existing-ID check error: %v", page, err)
+			log.Printf("[%s] page %d: existing-ID check error: %v", label, page, err)
 			break
 		}
 
@@ -228,7 +257,8 @@ func crawlExHentai(client *http.Client, db *sql.DB) []*EHArticle {
 		next = getEHID(parsed[len(parsed)-1])
 
 		log.Printf(
-			"[exhentai] page %d, total: %d, next: %d, existing: %d/%d, overlap: %d/2",
+			"[%s] page %d, total: %d, next: %d, existing: %d/%d, overlap: %d/2",
+			label,
 			page,
 			len(articles),
 			next,
@@ -238,14 +268,14 @@ func crawlExHentai(client *http.Client, db *sql.DB) []*EHArticle {
 		)
 
 		if consecutiveKnownPages >= 2 {
-			log.Printf("[exhentai] 2 consecutive fully-existing pages reached, stopping")
+			log.Printf("[%s] 2 consecutive fully-existing pages reached, stopping", label)
 			break
 		}
 
 		time.Sleep(ehRequestDelay)
 
 		if (page+1)%ehLongDelayInterval == 0 {
-			log.Printf("[exhentai] rate limit pause (120s)...")
+			log.Printf("[%s] rate limit pause (120s)...", label)
 			time.Sleep(ehLongDelay)
 		}
 	}
@@ -399,7 +429,9 @@ func ehArticleToColumnModel(art *EHArticle) *HitomiColumnModel {
 		}
 	}
 
-	// Tags: female→female:, male→male:, misc/other/mixed→plain
+	// Tags: female→female:, male→male:, misc/other/mixed→plain.
+	// Expunged is stored as a synthetic plain tag so existing DB/app schemas
+	// can expose it without a migration.
 	var tags []string
 	for _, category := range []string{"female", "male", "misc", "other", "mixed"} {
 		if catTags, ok := art.Descripts[category]; ok {
@@ -407,6 +439,9 @@ func ehArticleToColumnModel(art *EHArticle) *HitomiColumnModel {
 				tags = append(tags, normalizeEHTag(tag, category))
 			}
 		}
+	}
+	if art.Expunged {
+		tags = append(tags, expungedTag)
 	}
 	if len(tags) > 0 {
 		m.Tags = "|" + strings.Join(tags, "|") + "|"
@@ -433,10 +468,33 @@ func normalizeEHTag(tag, category string) string {
 	}
 }
 
+func setPipeTag(raw, tag string, enabled bool) string {
+	values := make([]string, 0)
+	seen := make(map[string]bool)
+	for _, value := range strings.Split(raw, "|") {
+		value = strings.TrimSpace(value)
+		if value == "" || value == tag {
+			continue
+		}
+		if !seen[value] {
+			seen[value] = true
+			values = append(values, value)
+		}
+	}
+	if enabled {
+		values = append(values, tag)
+	}
+	if len(values) == 0 {
+		return ""
+	}
+	return "|" + strings.Join(values, "|") + "|"
+}
+
 // mergeEHIntoModel supplements a Hitomi-sourced model with ExHentai data.
 func mergeEHIntoModel(model *HitomiColumnModel, eh *EHArticle) {
 	model.EHash = getEHHash(eh)
 	model.Uploader = eh.Uploader
+	model.Tags = setPipeTag(model.Tags, expungedTag, eh.Expunged)
 
 	if eh.Published != "" {
 		for _, layout := range []string{"2006-01-02 15:04", "2006-01-02 15:04:05"} {
