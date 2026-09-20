@@ -605,6 +605,15 @@ func TestSearchIndexLifecycle(t *testing.T) {
 			Tags:          "|female:loli|",
 			ExistOnHitomi: 0,
 		},
+		{
+			ID:            400,
+			Title:         "Expunged ExH Only",
+			Artists:       "|artist4|",
+			Language:      "korean",
+			Type:          "doujinshi",
+			Tags:          "|female:glasses|expunged|",
+			ExistOnHitomi: 0,
+		},
 	}
 
 	if err := upsertArticles(db, initial); err != nil {
@@ -653,7 +662,14 @@ func TestSearchIndexLifecycle(t *testing.T) {
 		t.Fatalf("exh title presence query: %v", err)
 	}
 	if count != 0 {
-		t.Fatalf("ExistOnHitomi=0 row should not be indexed, got %d", count)
+		t.Fatalf("ordinary ExistOnHitomi=0 row should not be indexed, got %d", count)
+	}
+
+	if err := db.QueryRow(`SELECT COUNT(*) FROM FtsTitle WHERE rowid = 400`).Scan(&count); err != nil {
+		t.Fatalf("expunged title presence query: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expunged ExH-only row should be indexed, got %d", count)
 	}
 
 	updated := []*HitomiColumnModel{

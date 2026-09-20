@@ -76,7 +76,7 @@ go build -o fast-hsync.exe .
 
 ## ExHentai 동기화
 
-`--with-exh`를 쓰면 ExHentai 일반 목록과 expunged 목록을 읽어서 다음 정보를 보강합니다.
+`--with-exh`를 쓰면 ExHentai 일반 목록과 `Browse Expunged Galleries` 목록을 각각 증분 수집해서 다음 정보를 보강합니다.
 
 - `EHash`
 - `Uploader`
@@ -84,6 +84,7 @@ go build -o fast-hsync.exe .
 - `Files`
 - `Class`
 - ExHentai에만 있는 항목(`ExistOnHitomi = 0`)
+- expunged 항목에는 기존 `Tags` 컬럼에 `expunged` 표시를 추가합니다. 별도 DB 스키마 마이그레이션은 필요하지 않습니다.
 
 ExHentai 쿠키는 `COOKIE` 환경변수에서 읽습니다.
 
@@ -96,9 +97,10 @@ $env:COOKIE = "ipb_member_id=...; ipb_pass_hash=...; igneous=..."
 
 1. DB에서 현재 최대 `Id`를 읽습니다.
 2. 기본값은 `latest_id - 10000`부터 약 2만 개 범위의 Hitomi gallery block을 다운로드합니다. `--start-id`/`--end-id`를 지정하면 그 범위를 그대로 사용합니다.
-3. 새 항목 또는 변경된 항목만 DB에 upsert합니다.
-4. FTS 테이블이 없으면 전체 생성하고, 있으면 변경된 row만 갱신합니다.
-5. 변경된 레코드가 있으면 `chunk/data-YYYY-MM-DD_HHMMSS.json` 파일로 저장합니다.
+3. ExHentai 동기화가 켜져 있으면 일반 목록과 expunged 전용 목록을 각각 읽고, expunged 항목은 `|expunged|` 태그로 표시합니다.
+4. 새 항목 또는 변경된 항목만 DB에 upsert합니다.
+5. FTS 테이블이 없으면 전체 생성하고, 있으면 변경된 row만 갱신합니다. Hitomi 항목과 expunged ExHentai 항목을 검색 인덱스에 포함합니다.
+6. 변경된 레코드가 있으면 `chunk/data-YYYY-MM-DD_HHMMSS.json` 파일로 저장합니다.
 
 ## 생성 파일
 

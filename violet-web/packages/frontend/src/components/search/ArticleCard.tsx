@@ -65,6 +65,9 @@ export const ArticleCard = memo(function ArticleCard({ article, viewMode = 'grid
 
   const artists = parsePipeTags(article.Artists);
   const language = article.Language ?? '';
+  const isExpunged = parsePipeTags(article.Tags).some(
+    (tag) => tag.toLowerCase() === 'expunged',
+  );
   const source = article.ExistOnHitomi === 1
     ? 'Hitomi'
     : article.EHash?.trim()
@@ -236,6 +239,7 @@ export const ArticleCard = memo(function ArticleCard({ article, viewMode = 'grid
                 onClick={(e) => { e.stopPropagation(); setShowInfoDialog(true); }}
               >#{article.Id}</span>
               {source && <span className={styles.sourceBadge}>{source}</span>}
+              {isExpunged && <span className={styles.sourceBadge}>EXPUNGED</span>}
             </span>
             {artists.length > 0 && (
               <span>

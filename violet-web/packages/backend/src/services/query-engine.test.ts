@@ -14,3 +14,12 @@ test('adds inclusive normalized publication bounds', () => {
 test('leaves legacy SQL unchanged without bounds', () => {
   assert.doesNotMatch(translateQuery('', 0, 30).sql, /datetime\(/);
 });
+
+
+test('keeps expunged ExHentai rows visible in default search', () => {
+  const empty = translateQuery('', 0, 30).sql;
+  assert.match(empty, /ExistOnHitomi=1 OR Tags LIKE '%\|expunged\|%'/);
+
+  const filtered = translateQuery('lang:korean', 0, 30, false).sql;
+  assert.match(filtered, /ExistOnHitomi=1 OR Tags LIKE '%\|expunged\|%'/);
+});
