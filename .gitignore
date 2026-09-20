@@ -6,3 +6,8 @@ violet-graph/.gocache/
 /data/
 /artifacts/
 /docs/superpowers/
+
+# WalnutPi local runtime/configuration
+/.env
+/mobile-db
+/violet-web/packages/backend/data
