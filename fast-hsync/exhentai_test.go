@@ -108,15 +108,15 @@ func TestSyncStateRoundTrip(t *testing.T) {
 
 func TestFilterExpungedMinID(t *testing.T) {
 	articles := []*EHArticle{
-		{URL: "https://exhentai.org/g/4000100/a/"},
-		{URL: "https://exhentai.org/g/4000000/b/"},
-		{URL: "https://exhentai.org/g/3999999/c/"},
+		{URL: "https://exhentai.org/g/3800100/a/"},
+		{URL: "https://exhentai.org/g/3800000/b/"},
+		{URL: "https://exhentai.org/g/3799999/c/"},
 	}
 	filtered := filterExpungedMinID(articles, expungedMinID)
 	if len(filtered) != 2 {
 		t.Fatalf("filtered len = %d, want 2", len(filtered))
 	}
-	if getEHID(filtered[0]) != 4000100 || getEHID(filtered[1]) != 4000000 {
+	if getEHID(filtered[0]) != 3800100 || getEHID(filtered[1]) != 3800000 {
 		t.Fatalf("unexpected filtered IDs: %d, %d", getEHID(filtered[0]), getEHID(filtered[1]))
 	}
 }
