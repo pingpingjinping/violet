@@ -45,8 +45,34 @@ func createTable(db *sql.DB) error {
 			Class TEXT,
 			ExistOnHitomi INTEGER DEFAULT 0,
 			Thumbnail TEXT
-		)
+		);
+
+		CREATE TABLE IF NOT EXISTS SyncState (
+			Key TEXT PRIMARY KEY,
+			Value TEXT NOT NULL
+		);
 	`)
+	return err
+}
+
+func getSyncState(db *sql.DB, key string) (string, bool, error) {
+	var value string
+	err := db.QueryRow(`SELECT Value FROM SyncState WHERE Key = ?`, key).Scan(&value)
+	if err == sql.ErrNoRows {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return value, true, nil
+}
+
+func setSyncState(db *sql.DB, key, value string) error {
+	_, err := db.Exec(`
+		INSERT INTO SyncState(Key, Value)
+		VALUES (?, ?)
+		ON CONFLICT(Key) DO UPDATE SET Value = excluded.Value
+	`, key, value)
 	return err
 }
 
