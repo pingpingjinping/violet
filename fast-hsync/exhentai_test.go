@@ -99,6 +99,9 @@ func TestCheckpointExpungedArticlesMergesExistingID(t *testing.T) {
 	if err := upsertArticles(db, []*HitomiColumnModel{existing}); err != nil {
 		t.Fatal(err)
 	}
+	if err := rebuildFts(db); err != nil {
+		t.Fatal(err)
+	}
 
 	batch := []*EHArticle{
 		{
