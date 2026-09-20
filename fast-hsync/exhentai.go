@@ -22,9 +22,9 @@ const (
 	ehLongDelay              = 120 * time.Second
 	ehLongDelayInterval      = 100
 	expungedTag               = "expunged"
-	expungedMinID             = 4000000
+	expungedMinID             = 3800000
 	expungedCheckpointPages   = 10
-	expungedBackfillStateKey  = "exhentai_expunged_backfill_4000000"
+	expungedBackfillStateKey  = "exhentai_expunged_backfill_3800000"
 )
 
 // EHArticle represents a parsed exhentai gallery entry.
