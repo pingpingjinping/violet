@@ -1,7 +1,9 @@
 import { getCachedSearchCount, getCachedSearchResult } from '../services/content-search-cache.js';
 import { BoundedCache } from '../services/bounded-cache.js';
+import { dirname, join } from 'path';
 import { Router } from 'express';
-import { getContentDb, isContentDbReady, isFtsReady } from '../services/content-db.js';
+import { getContentDb, getDbPath, isContentDbReady, isFtsReady } from '../services/content-db.js';
+import { PersistentTagSummaryCache } from '../services/tag-summary-cache.js';
 import { translateQuery, translateQueryCondition } from '../services/query-engine.js';
 import {
   getDateDistribution,
@@ -24,8 +26,11 @@ if (!loadSuggestionCacheFromFile() && isContentDbReady()) {
 
 export const contentRouter = Router();
 
-const tagSummaryCache = new BoundedCache<{ tags: TagEntry[]; ts: number }>();
-const TAG_SUMMARY_CACHE_TTL = 60_000;
+const tagSummaryCacheFile = process.env.USER_DB_PATH
+  ? join(dirname(process.env.USER_DB_PATH), 'tag-summary-cache.json')
+  : join(dirname(getDbPath()), 'tag-summary-cache.json');
+const tagSummaryCache = new PersistentTagSummaryCache(tagSummaryCacheFile, getDbPath(), 500);
+tagSummaryCache.load();
 const contextualSuggestionCache = new BoundedCache<{ suggestions: TagEntry[]; ts: number }>();
 const CONTEXTUAL_SUGGESTION_CACHE_TTL = 60_000;
 
@@ -183,9 +188,10 @@ contentRouter.get('/search/tags', (req, res) => {
 
   const query = (req.query.q as string) || '';
   const limit = Math.min(parseInt(req.query.limit as string) || 30, 100);
+  tagSummaryCache.refreshIfChanged();
   const cacheKey = `${query}\0${limit}`;
   const cached = tagSummaryCache.get(cacheKey);
-  if (cached && Date.now() - cached.ts < TAG_SUMMARY_CACHE_TTL) {
+  if (cached) {
     res.json({ tags: cached.tags });
     return;
   }
