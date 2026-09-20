@@ -67,10 +67,29 @@
   word-break: break-word;
 }
 
+.articleMetaLine {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .articleId {
   font-size: 0.8rem;
   color: var(--color-text-secondary);
   opacity: 0.6;
+}
+
+.sourceBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .meta {
