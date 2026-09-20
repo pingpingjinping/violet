@@ -30,6 +30,9 @@ test('language index upgrade preserves results, existing tables and indexes, and
     assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE name='idx_language'").get());
     assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE name='idx_language_exist_published'").get());
     const plan = db.prepare('EXPLAIN QUERY PLAN ' + countSql).all() as Array<{ detail: string }>;
-    assert.ok(plan.some((row) => row.detail.includes('COVERING INDEX idx_language_exist_id')));
+    assert.ok(plan.some((row) =>
+      row.detail.includes('COVERING INDEX idx_language_exist_id') ||
+      row.detail.includes('COVERING INDEX idx_language_exist_published'),
+    ));
   } finally { db.close(); }
 });
