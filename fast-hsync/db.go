@@ -103,7 +103,7 @@ func rebuildFts(db *sql.DB) error {
 		INSERT INTO FtsTitle(rowid, Title)
 		SELECT Id, COALESCE(Title, '')
 		FROM HitomiColumnModel
-		WHERE ExistOnHitomi = 1
+		WHERE (ExistOnHitomi = 1 OR Tags LIKE '%|expunged|%')
 	`); err != nil {
 		return err
 	}
@@ -118,7 +118,7 @@ func rebuildFts(db *sql.DB) error {
 			TRIM(REPLACE(REPLACE(COALESCE(Series, ''), ' ', '_'), '|', ' ')),
 			TRIM(REPLACE(REPLACE(COALESCE(Characters, ''), ' ', '_'), '|', ' '))
 		FROM HitomiColumnModel
-		WHERE ExistOnHitomi = 1
+		WHERE (ExistOnHitomi = 1 OR Tags LIKE '%|expunged|%')
 	`); err != nil {
 		return err
 	}
@@ -179,7 +179,7 @@ func updateFtsRows(db *sql.DB, ids []int) error {
 				INSERT INTO FtsTitle(rowid, Title)
 				SELECT Id, COALESCE(Title, '')
 				FROM HitomiColumnModel
-				WHERE ExistOnHitomi = 1 AND Id IN (%s)
+				WHERE (ExistOnHitomi = 1 OR Tags LIKE '%|expunged|%') AND Id IN (%s)
 			`, inClause),
 			insertArgs...,
 		); err != nil {
@@ -196,7 +196,7 @@ func updateFtsRows(db *sql.DB, ids []int) error {
 					TRIM(REPLACE(REPLACE(COALESCE(Series, ''), ' ', '_'), '|', ' ')),
 					TRIM(REPLACE(REPLACE(COALESCE(Characters, ''), ' ', '_'), '|', ' '))
 				FROM HitomiColumnModel
-				WHERE ExistOnHitomi = 1 AND Id IN (%s)
+				WHERE (ExistOnHitomi = 1 OR Tags LIKE '%|expunged|%') AND Id IN (%s)
 			`, inClause),
 			args...,
 		); err != nil {
