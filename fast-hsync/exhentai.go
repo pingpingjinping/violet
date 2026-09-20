@@ -185,23 +185,29 @@ func syncExHentai(cookie string, db *sql.DB) []*EHArticle {
 	return deduped
 }
 
+func exHentaiBrowseURL(next int, expunged bool) string {
+	expungedParam := ""
+	if expunged {
+		expungedParam = "&f_sh=on"
+	}
+	return fmt.Sprintf(
+		"https://exhentai.org/?next=%d&f_search=&f_doujinshi=on&f_manga=on&f_artistcg=on&f_gamecg=on&f_cats=0&f_sname=on&f_stags=on&advsearch=1&f_sdesc=on%s",
+		next,
+		expungedParam,
+	)
+}
+
 func crawlExHentai(client *http.Client, db *sql.DB, expunged bool) []*EHArticle {
 	var articles []*EHArticle
 	next := 0
 	consecutiveKnownPages := 0
 	label := "exhentai"
-	expungedParam := ""
 	if expunged {
 		label = "exhentai-expunged"
-		expungedParam = "&f_sh=on"
 	}
 
 	for page := 0; ; page++ {
-		url := fmt.Sprintf(
-			"https://exhentai.org/?next=%d&f_search=&f_doujinshi=on&f_manga=on&f_artistcg=on&f_gamecg=on&f_cats=0&f_sname=on&f_stags=on&advsearch=1&f_sdesc=on%s",
-			next,
-			expungedParam,
-		)
+		url := exHentaiBrowseURL(next, expunged)
 
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
