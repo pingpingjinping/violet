@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -35,6 +36,33 @@ func TestNormalizeEHTag(t *testing.T) {
 		}
 	}
 }
+
+func TestExHentaiBrowseURLExpunged(t *testing.T) {
+	normal := exHentaiBrowseURL(123, false)
+	if strings.Contains(normal, "f_sh=on") {
+		t.Fatalf("normal URL unexpectedly enables expunged browsing: %s", normal)
+	}
+	expunged := exHentaiBrowseURL(456, true)
+	if !strings.Contains(expunged, "f_sh=on") {
+		t.Fatalf("expunged URL missing f_sh=on: %s", expunged)
+	}
+	if !strings.Contains(expunged, "next=456") {
+		t.Fatalf("expunged URL missing cursor: %s", expunged)
+	}
+}
+
+func TestSetPipeTag(t *testing.T) {
+	if got := setPipeTag("|female:loli|", expungedTag, true); got != "|female:loli|expunged|" {
+		t.Fatalf("add expunged = %q", got)
+	}
+	if got := setPipeTag("|female:loli|expunged|", expungedTag, false); got != "|female:loli|" {
+		t.Fatalf("remove expunged = %q", got)
+	}
+	if got := setPipeTag("", expungedTag, true); got != "|expunged|" {
+		t.Fatalf("empty add expunged = %q", got)
+	}
+}
+
 
 func TestParseExHentaiExtendedList(t *testing.T) {
 	html := `<html><body>
@@ -124,6 +152,7 @@ func TestEHArticleToColumnModel(t *testing.T) {
 		Uploader:  "someuploader",
 		Published: "2024-06-15 10:30",
 		Files:     "30 pages",
+		Expunged:  true,
 		Descripts: map[string][]string{
 			"artist":    {"testartist"},
 			"female":    {"lolicon", "glasses"},
@@ -167,7 +196,7 @@ func TestEHArticleToColumnModel(t *testing.T) {
 	if m.Files != 30 {
 		t.Errorf("Files = %d", m.Files)
 	}
-	if m.Tags != "|female:loli|female:glasses|male:shota|" {
+	if m.Tags != "|female:loli|female:glasses|male:shota|expunged|" {
 		t.Errorf("Tags = %q", m.Tags)
 	}
 }
@@ -208,6 +237,21 @@ func TestMergeEHIntoModel(t *testing.T) {
 	}
 	if model.ExistOnHitomi != 1 {
 		t.Errorf("ExistOnHitomi changed to %d", model.ExistOnHitomi)
+	}
+
+	expunged := &EHArticle{
+		URL:      "https://exhentai.org/g/12345/hash999/",
+		Expunged: true,
+	}
+	mergeEHIntoModel(model, expunged)
+	if model.Tags != "|expunged|" {
+		t.Fatalf("expunged marker not added: %q", model.Tags)
+	}
+
+	normal := &EHArticle{URL: "https://exhentai.org/g/12345/hash999/"}
+	mergeEHIntoModel(model, normal)
+	if model.Tags != "" {
+		t.Fatalf("expunged marker not removed after de-expunge: %q", model.Tags)
 	}
 }
 
