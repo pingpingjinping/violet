@@ -67,3 +67,21 @@ test('builds a continuous distribution and counts invalid rows', () => {
   assert.equal(value.unit, 'month');
   assert.deepEqual(value.buckets.map((bucket) => bucket.count), [1, 0, 1]);
 });
+
+test('distribution groups tick and text values on the same UTC day', () => {
+  const db = new Database(':memory:');
+  try {
+    db.exec('CREATE TABLE HitomiColumnModel (Published);');
+    db.prepare('INSERT INTO HitomiColumnModel VALUES (?)').run(638712864000000000n);
+    db.prepare('INSERT INTO HitomiColumnModel VALUES (?)').run('2025-01-01 00:00:00');
+    db.prepare('INSERT INTO HitomiColumnModel VALUES (?)').run('2025-02-30 00:00:00');
+    const value = getDateDistribution(db, '1', 'utc');
+    assert.equal(value.totalCount, 2);
+    assert.equal(value.invalidCount, 1);
+    assert.equal(value.minDate, '2025-01-01');
+    assert.equal(value.maxDate, '2025-01-01');
+    assert.deepEqual(value.buckets.map((bucket) => bucket.count), [2]);
+  } finally {
+    db.close();
+  }
+});
