@@ -21,10 +21,12 @@ const (
 	ehRequestDelay           = 1 * time.Second
 	ehLongDelay              = 120 * time.Second
 	ehLongDelayInterval      = 100
-	expungedTag               = "expunged"
-	expungedMinID             = 3800000
-	expungedCheckpointPages   = 10
-	expungedBackfillStateKey  = "exhentai_expunged_backfill_3800000"
+	expungedTag                      = "expunged"
+	expungedMinID                    = 3800000
+	expungedCheckpointPages          = 10
+	expungedBackfillStateKey         = "exhentai_expunged_backfill_3800000"
+	expungedPreviousMinID            = 4000000
+	expungedPreviousBackfillStateKey = "exhentai_expunged_backfill_4000000"
 )
 
 // EHArticle represents a parsed exhentai gallery entry.
@@ -220,6 +222,26 @@ func shouldStopOnKnownPages(expunged, backfillComplete bool, consecutiveKnownPag
 	return !expunged || backfillComplete
 }
 
+func getExpungedBackfillStart(db *sql.DB) (bool, int, error) {
+	state, found, err := getSyncState(db, expungedBackfillStateKey)
+	if err != nil {
+		return false, 0, err
+	}
+	if found && state == "complete" {
+		return true, 0, nil
+	}
+
+	previousState, previousFound, err := getSyncState(db, expungedPreviousBackfillStateKey)
+	if err != nil {
+		return false, 0, err
+	}
+	if previousFound && previousState == "complete" {
+		return false, expungedPreviousMinID, nil
+	}
+
+	return false, 0, nil
+}
+
 func checkpointExpungedArticles(db *sql.DB, articles []*EHArticle) error {
 	if len(articles) == 0 {
 		return nil
@@ -282,14 +304,16 @@ func crawlExHentai(client *http.Client, db *sql.DB, expunged bool) []*EHArticle 
 	label := "exhentai"
 	if expunged {
 		label = "exhentai-expunged"
-		state, found, err := getSyncState(db, expungedBackfillStateKey)
+		var err error
+		backfillComplete, next, err = getExpungedBackfillStart(db)
 		if err != nil {
 			log.Printf("[%s] failed to read backfill state: %v", label, err)
 			return articles
 		}
-		backfillComplete = found && state == "complete"
 		if backfillComplete {
 			log.Printf("[%s] backfill complete; using 2-page overlap stop", label)
+		} else if next > 0 {
+			log.Printf("[%s] extending completed backfill from Id %d down to %d", label, next, expungedMinID)
 		} else {
 			log.Printf("[%s] backfill in progress: Id >= %d; known-page stop disabled until floor is reached", label, expungedMinID)
 		}
