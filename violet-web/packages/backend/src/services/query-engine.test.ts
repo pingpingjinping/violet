@@ -20,6 +20,13 @@ test('leaves publication normalization out without bounds', () => {
   assert.doesNotMatch(translateQuery('', 0, 30).sql, /datetime\(/);
 });
 
+test('preserves direct numeric ID lookup without visibility filtering', () => {
+  const translated = translateQuery('4201234', 0, 30, true);
+  assert.match(translated.sql, /WHERE Id=4201234/);
+  assert.doesNotMatch(translated.sql, /ExistOnHitomi/);
+  assert.doesNotMatch(translated.sql, /expunged/);
+});
+
 test('splits visible and expunged rows so composite indexes can be used', () => {
   const translated = translateQuery('lang:korean', 0, 30, true);
   assert.match(translated.sql, /UNION ALL/);
