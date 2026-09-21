@@ -123,6 +123,7 @@ export function getDateDistributionFromSql(
   db: Database.Database,
   publishedSql: string,
   cacheKey: string,
+  blockedPublishedSql?: string | null,
 ): DateDistributionResponse {
   const now = Date.now();
   const distributionCache = getDistributionCache(db);
@@ -138,13 +139,30 @@ export function getDateDistributionFromSql(
 
   const dayCounts = new Map<string, number>();
   let invalidCount = 0;
-  for (const row of publishedRows) {
-    const start = normalizedPublishedDay(row.Published);
-    if (!start) {
-      invalidCount += 1;
-      continue;
+
+  const applyRows = (
+    rows: Array<{ Published: number | string | null }>,
+    delta: 1 | -1,
+  ) => {
+    for (const row of rows) {
+      const start = normalizedPublishedDay(row.Published);
+      if (!start) {
+        invalidCount += delta;
+        continue;
+      }
+      const next = (dayCounts.get(start) ?? 0) + delta;
+      if (next <= 0) dayCounts.delete(start);
+      else dayCounts.set(start, next);
     }
-    dayCounts.set(start, (dayCounts.get(start) ?? 0) + 1);
+  };
+
+  applyRows(publishedRows, 1);
+
+  if (blockedPublishedSql) {
+    const blockedRows = db.prepare(blockedPublishedSql).all() as Array<{
+      Published: number | string | null;
+    }>;
+    applyRows(blockedRows, -1);
   }
 
   const validDays = [...dayCounts.entries()]
