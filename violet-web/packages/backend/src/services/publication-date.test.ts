@@ -111,3 +111,32 @@ test('accepts a prefiltered publication source query', () => {
     db.close();
   }
 });
+
+
+test('subtracts blocked publication rows from the base distribution', () => {
+  const db = new Database(':memory:');
+  try {
+    db.exec(`
+      CREATE TABLE HitomiColumnModel (Id INTEGER PRIMARY KEY, Published);
+      INSERT INTO HitomiColumnModel VALUES
+        (1, '2025-01-01 00:00:00'),
+        (2, '2025-01-01 00:00:00'),
+        (3, '2025-02-01 00:00:00');
+    `);
+
+    const value = getDateDistributionFromSql(
+      db,
+      'SELECT Published FROM HitomiColumnModel',
+      'subtract-blocked',
+      'SELECT Published FROM HitomiColumnModel WHERE Id=2',
+    );
+
+    assert.equal(value.totalCount, 2);
+    assert.equal(value.invalidCount, 0);
+    assert.equal(value.minDate, '2025-01-01');
+    assert.equal(value.maxDate, '2025-02-01');
+    assert.deepEqual(value.buckets.map((bucket) => bucket.count), [1, 1]);
+  } finally {
+    db.close();
+  }
+});
