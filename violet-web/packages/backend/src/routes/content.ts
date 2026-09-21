@@ -4,9 +4,9 @@ import { dirname, join } from 'path';
 import { Router } from 'express';
 import { getContentDb, getDbPath, isContentDbReady, isFtsReady } from '../services/content-db.js';
 import { PersistentTagSummaryCache } from '../services/tag-summary-cache.js';
-import { translateQuery, translateQueryCondition } from '../services/query-engine.js';
+import { translatePublicationQuery, translateQuery, translateTagSummaryQuery } from '../services/query-engine.js';
 import {
-  getDateDistribution,
+  getDateDistributionFromSql,
   parseDateBounds,
 } from '../services/publication-date.js';
 import {
@@ -160,19 +160,19 @@ contentRouter.get('/search/date-distribution', (req, res) => {
   const startedAt = performance.now();
 
   try {
-    const condition = translateQueryCondition(query, useFts);
-    const value = getDateDistribution(
+    const publishedSql = translatePublicationQuery(query, useFts);
+    const value = getDateDistributionFromSql(
       db,
-      condition,
+      publishedSql,
       JSON.stringify([query, useFts]),
     );
     console.log(`[SQL] date-distribution=${(performance.now() - startedAt).toFixed(1)}ms | q="${query}" fts=${useFts} | ${value.buckets.length} buckets`);
     res.json(value);
   } catch {
-    const condition = translateQueryCondition(query, false);
-    const value = getDateDistribution(
+    const publishedSql = translatePublicationQuery(query, false);
+    const value = getDateDistributionFromSql(
       db,
-      condition,
+      publishedSql,
       JSON.stringify([query, false]),
     );
     console.log(`[SQL] date-distribution=${(performance.now() - startedAt).toFixed(1)}ms | q="${query}" fts=fallback | ${value.buckets.length} buckets`);
@@ -200,30 +200,26 @@ contentRouter.get('/search/tags', (req, res) => {
   const useFts = isFtsReady();
 
   try {
-    const condition = translateQueryCondition(query, useFts);
-    const rows = db
-      .prepare(`SELECT Artists, Series, Characters, Groups, Tags FROM HitomiColumnModel WHERE ${condition}`)
-      .iterate() as Iterable<{
-        Artists: string | null;
-        Series: string | null;
-        Characters: string | null;
-        Groups: string | null;
-        Tags: string | null;
-      }>;
+    const sql = translateTagSummaryQuery(query, useFts);
+    const rows = db.prepare(sql).iterate() as Iterable<{
+      Artists: string | null;
+      Series: string | null;
+      Characters: string | null;
+      Groups: string | null;
+      Tags: string | null;
+    }>;
     const tags = buildTagSummary(rows, limit);
     tagSummaryCache.set(cacheKey, { tags, ts: Date.now() });
     res.json({ tags });
   } catch {
-    const condition = translateQueryCondition(query, false);
-    const rows = db
-      .prepare(`SELECT Artists, Series, Characters, Groups, Tags FROM HitomiColumnModel WHERE ${condition}`)
-      .iterate() as Iterable<{
-        Artists: string | null;
-        Series: string | null;
-        Characters: string | null;
-        Groups: string | null;
-        Tags: string | null;
-      }>;
+    const sql = translateTagSummaryQuery(query, false);
+    const rows = db.prepare(sql).iterate() as Iterable<{
+      Artists: string | null;
+      Series: string | null;
+      Characters: string | null;
+      Groups: string | null;
+      Tags: string | null;
+    }>;
     const tags = buildTagSummary(rows, limit);
     tagSummaryCache.set(cacheKey, { tags, ts: Date.now() });
     res.json({ tags });
