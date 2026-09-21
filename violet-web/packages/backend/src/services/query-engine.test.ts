@@ -47,6 +47,8 @@ test('applies batched negative FTS once after the visible-id union', () => {
     translated.countSql.match(/FtsTags WHERE Tags MATCH/g)?.length,
     1,
   );
+  assert.match(translated.countSql, /blocked AS MATERIALIZED/);
+  assert.doesNotMatch(translated.countSql, /Id NOT IN/);
 });
 
 test('keeps existing visibility and fallback filtering semantics', () => {
@@ -88,7 +90,7 @@ test('keeps existing visibility and fallback filtering semantics', () => {
 });
 
 test('uses optimized visible sources for date distribution and tag summary', () => {
-  const publicationSql = translatePublicationQuery(
+  const publication = translatePublicationQuery(
     'lang:korean -female:snuff -female:gore',
     true,
   );
@@ -97,11 +99,25 @@ test('uses optimized visible sources for date distribution and tag summary', () 
     true,
   );
 
-  for (const sql of [publicationSql, tagSql]) {
-    assert.match(sql, /UNION ALL/);
-    assert.match(sql, /ExistOnHitomi=1/);
-    assert.match(sql, /ExistOnHitomi=0/);
-    assert.match(sql, /Tags LIKE '%\|expunged\|%'/);
-    assert.equal(sql.match(/FtsTags WHERE Tags MATCH/g)?.length, 1);
-  }
+  assert.match(publication.baseSql, /UNION ALL/);
+  assert.match(publication.baseSql, /ExistOnHitomi=1/);
+  assert.match(publication.baseSql, /ExistOnHitomi=0/);
+  assert.match(publication.baseSql, /Tags LIKE '%\|expunged\|%'/);
+  assert.doesNotMatch(publication.baseSql, /FtsTags WHERE Tags MATCH/);
+  assert.ok(publication.blockedSql);
+  assert.match(publication.blockedSql, /blocked AS MATERIALIZED/);
+  assert.match(publication.blockedSql, /INDEXED BY idx_language_exist_published/);
+  assert.equal(publication.blockedSql.match(/FtsTags WHERE Tags MATCH/g)?.length, 1);
+
+  assert.match(tagSql, /UNION ALL/);
+  assert.match(tagSql, /ExistOnHitomi=1/);
+  assert.match(tagSql, /ExistOnHitomi=0/);
+  assert.match(tagSql, /Tags LIKE '%\|expunged\|%'/);
+  assert.equal(tagSql.match(/FtsTags WHERE Tags MATCH/g)?.length, 1);
+});
+
+test('keeps legacy date filtering when a negative FTS query has no language filter', () => {
+  const publication = translatePublicationQuery('-female:snuff', true);
+  assert.equal(publication.blockedSql, null);
+  assert.match(publication.baseSql, /Id NOT IN/);
 });
