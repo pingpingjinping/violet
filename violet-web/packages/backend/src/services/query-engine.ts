@@ -7,7 +7,70 @@
 import type { SearchDateRange } from '@violet-web/shared';
 import { normalizedPublishedSql, parseDateBounds } from './publication-date.js';
 
-const visibleGalleryCondition = "(ExistOnHitomi=1 OR Tags LIKE '%|expunged|%')";
+const expungedTagCondition = "Tags LIKE '%|expunged|%'";
+const visibleGalleryCondition = `(ExistOnHitomi=1 OR ${expungedTagCondition})`;
+
+type QueryParts = {
+  where: string;
+  negFts: string;
+  applyVisibility: boolean;
+};
+
+function translateQueryParts(
+  query: string,
+  useFts: boolean = false,
+): QueryParts {
+  query = query.trim();
+
+  // Numeric ID queries intentionally bypass gallery visibility, preserving
+  // the legacy direct-lookup behavior.
+  const firstToken = query.split(' ')[0];
+  const nn = parseInt(firstToken);
+  if (!isNaN(nn) && firstToken === String(nn)) {
+    return { where: `Id=${nn}`, negFts: '', applyVisibility: false };
+  }
+
+  if (query === '') {
+    return { where: '1=1', negFts: '', applyVisibility: true };
+  }
+
+  const tokens = splitTokens(query)
+    .map((x) => x.trim())
+    .filter((x) => x !== '');
+  const translator = new QueryTranslator(tokens, useFts);
+  return {
+    where: translator.parseExpression() || '1=1',
+    negFts: translator.getNegFtsClause(),
+    applyVisibility: true,
+  };
+}
+
+function canUseVisibleUnion(parts: QueryParts): boolean {
+  // Preserve legacy SQL precedence for explicit OR expressions. Simple
+  // searches (including the default language + negative-tag query) take the
+  // optimized UNION path.
+  return parts.applyVisibility && !/\sOR\s/i.test(parts.where);
+}
+
+function joinConditions(...conditions: Array<string | undefined>): string {
+  const values = conditions.filter((value): value is string => Boolean(value));
+  return values.length > 0 ? values.map((value) => `(${value})`).join(' AND ') : '1=1';
+}
+
+function buildVisibleSource(
+  parts: QueryParts,
+  columns: string,
+  extraCondition?: string,
+): string {
+  const base = joinConditions(parts.where, extraCondition);
+  return `SELECT ${columns}
+FROM HitomiColumnModel
+WHERE ${joinConditions(base, 'ExistOnHitomi=1')}
+UNION ALL
+SELECT ${columns}
+FROM HitomiColumnModel
+WHERE ${joinConditions(base, 'ExistOnHitomi=0', expungedTagCondition)}`;
+}
 
 export function translateQuery(
   query: string,
@@ -16,46 +79,74 @@ export function translateQuery(
   useFts: boolean = false,
   dateRange: SearchDateRange = {},
 ): { sql: string; countSql: string } {
-  const baseCondition = translateQueryCondition(query, useFts);
+  const parts = translateQueryParts(query, useFts);
   const parsed = parseDateBounds(dateRange.from, dateRange.to);
   const normalized = `(${normalizedPublishedSql('Published')})`;
   const dateCondition = [
     parsed.from ? `${normalized} >= '${parsed.from}'` : '',
     parsed.toExclusive ? `${normalized} < '${parsed.toExclusive}'` : '',
   ].filter(Boolean).join(' AND ');
-  const condition = dateCondition
-    ? `(${baseCondition}) AND ${dateCondition}`
-    : baseCondition;
+
+  if (!canUseVisibleUnion(parts)) {
+    const baseCondition = translateQueryCondition(query, useFts);
+    const condition = dateCondition
+      ? `(${baseCondition}) AND ${dateCondition}`
+      : baseCondition;
+    return {
+      sql: `SELECT * FROM HitomiColumnModel WHERE ${condition} ORDER BY Id DESC LIMIT ${pageSize} OFFSET ${page * pageSize}`,
+      countSql: `SELECT COUNT(*) as cnt FROM HitomiColumnModel WHERE ${condition}`,
+    };
+  }
+
+  const visibleSource = buildVisibleSource(parts, 'Id', dateCondition || undefined);
+  const filteredIds = `SELECT Id FROM visible_ids WHERE 1=1${parts.negFts}`;
   return {
-    sql: `SELECT * FROM HitomiColumnModel WHERE ${condition} ORDER BY Id DESC LIMIT ${pageSize} OFFSET ${page * pageSize}`,
-    countSql: `SELECT COUNT(*) as cnt FROM HitomiColumnModel WHERE ${condition}`,
+    sql: `WITH visible_ids AS NOT MATERIALIZED (
+${visibleSource}
+),
+page_ids AS (
+  ${filteredIds}
+  ORDER BY Id DESC
+  LIMIT ${pageSize} OFFSET ${page * pageSize}
+)
+SELECT h.*
+FROM page_ids p
+JOIN HitomiColumnModel h ON h.Id=p.Id
+ORDER BY h.Id DESC`,
+    countSql: `WITH visible_ids AS NOT MATERIALIZED (
+${visibleSource}
+)
+SELECT COUNT(*) as cnt
+FROM visible_ids
+WHERE 1=1${parts.negFts}`,
   };
+}
+
+export function translateDateDistributionQuery(
+  query: string,
+  useFts: boolean = false,
+): string {
+  const parts = translateQueryParts(query, useFts);
+  if (!canUseVisibleUnion(parts)) {
+    return `SELECT Published FROM HitomiColumnModel WHERE ${translateQueryCondition(query, useFts)}`;
+  }
+
+  const visibleSource = buildVisibleSource(parts, 'Id, Published');
+  return `WITH visible_dates AS NOT MATERIALIZED (
+${visibleSource}
+)
+SELECT Published
+FROM visible_dates
+WHERE 1=1${parts.negFts}`;
 }
 
 export function translateQueryCondition(
   query: string,
   useFts: boolean = false,
 ): string {
-  query = query.trim();
-
-  // Numeric ID query
-  const nn = parseInt(query.split(' ')[0]);
-  if (!isNaN(nn) && query.split(' ')[0] === String(nn)) {
-    return `Id=${nn}`;
-  }
-
-  if (query === '') {
-    return visibleGalleryCondition;
-  }
-
-  const tokens = splitTokens(query)
-    .map((x) => x.trim())
-    .filter((x) => x !== '');
-  const translator = new QueryTranslator(tokens, useFts);
-  const where = translator.parseExpression();
-  const negFts = translator.getNegFtsClause();
-
-  return `${where}${negFts} AND ${visibleGalleryCondition}`;
+  const parts = translateQueryParts(query, useFts);
+  if (!parts.applyVisibility) return `${parts.where}${parts.negFts}`;
+  return `${parts.where}${parts.negFts} AND ${visibleGalleryCondition}`;
 }
 
 function splitTokens(input: string): string[] {
