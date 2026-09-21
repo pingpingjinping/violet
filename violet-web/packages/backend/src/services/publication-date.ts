@@ -119,9 +119,9 @@ function normalizedPublishedDay(value: number | string | null): string | null {
     : null;
 }
 
-export function getDateDistribution(
+export function getDateDistributionFromSql(
   db: Database.Database,
-  condition: string,
+  publishedSql: string,
   cacheKey: string,
 ): DateDistributionResponse {
   const now = Date.now();
@@ -132,11 +132,9 @@ export function getDateDistribution(
 
   // Pull raw publication values only. On low-power storage this is much faster
   // than materializing datetime() for every matching row and grouping in SQLite.
-  const publishedRows = db.prepare(`
-    SELECT Published
-    FROM HitomiColumnModel
-    WHERE ${condition}
-  `).all() as Array<{ Published: number | string | null }>;
+  const publishedRows = db.prepare(publishedSql).all() as Array<{
+    Published: number | string | null;
+  }>;
 
   const dayCounts = new Map<string, number>();
   let invalidCount = 0;
@@ -189,4 +187,17 @@ export function getDateDistribution(
   }
   distributionCache.set(cacheKey, { value, expiresAt: Date.now() + CACHE_TTL_MS });
   return value;
+}
+
+
+export function getDateDistribution(
+  db: Database.Database,
+  condition: string,
+  cacheKey: string,
+): DateDistributionResponse {
+  return getDateDistributionFromSql(
+    db,
+    `SELECT Published FROM HitomiColumnModel WHERE ${condition}`,
+    cacheKey,
+  );
 }
