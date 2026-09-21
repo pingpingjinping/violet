@@ -160,20 +160,22 @@ contentRouter.get('/search/date-distribution', (req, res) => {
   const startedAt = performance.now();
 
   try {
-    const publishedSql = translatePublicationQuery(query, useFts);
+    const publication = translatePublicationQuery(query, useFts);
     const value = getDateDistributionFromSql(
       db,
-      publishedSql,
+      publication.baseSql,
       JSON.stringify([query, useFts]),
+      publication.blockedSql,
     );
     console.log(`[SQL] date-distribution=${(performance.now() - startedAt).toFixed(1)}ms | q="${query}" fts=${useFts} | ${value.buckets.length} buckets`);
     res.json(value);
   } catch {
-    const publishedSql = translatePublicationQuery(query, false);
+    const publication = translatePublicationQuery(query, false);
     const value = getDateDistributionFromSql(
       db,
-      publishedSql,
+      publication.baseSql,
       JSON.stringify([query, false]),
+      publication.blockedSql,
     );
     console.log(`[SQL] date-distribution=${(performance.now() - startedAt).toFixed(1)}ms | q="${query}" fts=fallback | ${value.buckets.length} buckets`);
     res.json(value);
