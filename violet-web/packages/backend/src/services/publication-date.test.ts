@@ -121,7 +121,7 @@ test('subtracts blocked publication rows from the base distribution', () => {
       INSERT INTO HitomiColumnModel VALUES
         (1, '2025-01-01 00:00:00'),
         (2, '2025-01-01 00:00:00'),
-        (3, '2025-02-01 00:00:00');
+        (3, '2025-01-02 00:00:00');
     `);
 
     const value = getDateDistributionFromSql(
@@ -134,7 +134,7 @@ test('subtracts blocked publication rows from the base distribution', () => {
     assert.equal(value.totalCount, 2);
     assert.equal(value.invalidCount, 0);
     assert.equal(value.minDate, '2025-01-01');
-    assert.equal(value.maxDate, '2025-02-01');
+    assert.equal(value.maxDate, '2025-01-02');
     assert.deepEqual(value.buckets.map((bucket) => bucket.count), [1, 1]);
   } finally {
     db.close();
