@@ -13,6 +13,7 @@ type QueryParts = {
   where: string;
   negFts: string;
   blockedFtsSql: string | null;
+  bypassVisibility: boolean;
 };
 
 function translateQueryParts(
@@ -24,11 +25,21 @@ function translateQueryParts(
   // Numeric ID query
   const nn = parseInt(query.split(' ')[0]);
   if (!isNaN(nn) && query.split(' ')[0] === String(nn)) {
-    return { where: `Id=${nn}`, negFts: '', blockedFtsSql: null };
+    return {
+      where: `Id=${nn}`,
+      negFts: '',
+      blockedFtsSql: null,
+      bypassVisibility: true,
+    };
   }
 
   if (query === '') {
-    return { where: '1=1', negFts: '', blockedFtsSql: null };
+    return {
+      where: '1=1',
+      negFts: '',
+      blockedFtsSql: null,
+      bypassVisibility: false,
+    };
   }
 
   const tokens = splitTokens(query)
@@ -40,6 +51,7 @@ function translateQueryParts(
     where,
     negFts: translator.getNegFtsClause(),
     blockedFtsSql: translator.getBlockedFtsSql(),
+    bypassVisibility: false,
   };
 }
 
@@ -47,7 +59,16 @@ function buildVisibleCte(
   cteName: string,
   columns: string,
   condition: string,
+  bypassVisibility: boolean = false,
 ): string {
+  if (bypassVisibility) {
+    return `${cteName} AS NOT MATERIALIZED (
+      SELECT ${columns}
+      FROM HitomiColumnModel
+      WHERE ${condition}
+    )`;
+  }
+
   return `${cteName} AS NOT MATERIALIZED (
     SELECT ${columns}
     FROM HitomiColumnModel
@@ -68,8 +89,14 @@ function buildSearchCondition(
   query: string,
   useFts: boolean,
   dateRange: SearchDateRange = {},
-): { condition: string; negFts: string; blockedFtsSql: string | null } {
-  const { where, negFts, blockedFtsSql } = translateQueryParts(query, useFts);
+): {
+  condition: string;
+  negFts: string;
+  blockedFtsSql: string | null;
+  bypassVisibility: boolean;
+} {
+  const { where, negFts, blockedFtsSql, bypassVisibility } =
+    translateQueryParts(query, useFts);
   const parsed = parseDateBounds(dateRange.from, dateRange.to);
   const normalized = `(${normalizedPublishedSql('Published')})`;
   const dateCondition = [
@@ -79,7 +106,7 @@ function buildSearchCondition(
   const condition = dateCondition
     ? `(${where}) AND ${dateCondition}`
     : where;
-  return { condition, negFts, blockedFtsSql };
+  return { condition, negFts, blockedFtsSql, bypassVisibility };
 }
 
 export function translateQuery(
@@ -89,12 +116,18 @@ export function translateQuery(
   useFts: boolean = false,
   dateRange: SearchDateRange = {},
 ): { sql: string; countSql: string } {
-  const { condition, negFts, blockedFtsSql } = buildSearchCondition(query, useFts, dateRange);
-  const visibleIds = buildVisibleCte('visible_ids', 'Id', condition);
+  const { condition, negFts, blockedFtsSql, bypassVisibility } =
+    buildSearchCondition(query, useFts, dateRange);
+  const visibleIds = buildVisibleCte(
+    'visible_ids',
+    'Id',
+    condition,
+    bypassVisibility,
+  );
   const filteredWhere = `1=1${negFts}`;
   const offset = page * pageSize;
 
-  const countSql = blockedFtsSql
+  const countSql = blockedFtsSql && !bypassVisibility
     ? `WITH blocked AS MATERIALIZED (
         ${blockedFtsSql}
       )
@@ -145,8 +178,14 @@ export function translatePublicationQuery(
   query: string,
   useFts: boolean = false,
 ): { baseSql: string; blockedSql: string | null } {
-  const { where, negFts, blockedFtsSql } = translateQueryParts(query, useFts);
-  const visibleDates = buildVisibleCte('visible_dates', 'Id, Published', where);
+  const { where, negFts, blockedFtsSql, bypassVisibility } =
+    translateQueryParts(query, useFts);
+  const visibleDates = buildVisibleCte(
+    'visible_dates',
+    'Id, Published',
+    where,
+    bypassVisibility,
+  );
 
   if (!blockedFtsSql || !/\bLanguage\s*=\s*'/.test(where)) {
     return {
@@ -177,8 +216,14 @@ export function translateTagSummaryQuery(
   query: string,
   useFts: boolean = false,
 ): string {
-  const { where, negFts } = translateQueryParts(query, useFts);
-  const visibleIds = buildVisibleCte('visible_ids', 'Id', where);
+  const { where, negFts, bypassVisibility } =
+    translateQueryParts(query, useFts);
+  const visibleIds = buildVisibleCte(
+    'visible_ids',
+    'Id',
+    where,
+    bypassVisibility,
+  );
   return `WITH ${visibleIds},
     filtered_ids AS NOT MATERIALIZED (
       SELECT Id
@@ -194,7 +239,9 @@ export function translateQueryCondition(
   query: string,
   useFts: boolean = false,
 ): string {
-  const { where, negFts } = translateQueryParts(query, useFts);
+  const { where, negFts, bypassVisibility } =
+    translateQueryParts(query, useFts);
+  if (bypassVisibility) return `(${where})${negFts}`;
   return `(${where})${negFts} AND ${visibleGalleryCondition}`;
 }
 
