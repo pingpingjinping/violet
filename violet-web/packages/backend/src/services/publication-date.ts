@@ -124,6 +124,18 @@ export function getDateDistribution(
   condition: string,
   cacheKey: string,
 ): DateDistributionResponse {
+  return getDateDistributionFromSql(
+    db,
+    `SELECT Published FROM HitomiColumnModel WHERE ${condition}`,
+    cacheKey,
+  );
+}
+
+export function getDateDistributionFromSql(
+  db: Database.Database,
+  publishedSql: string,
+  cacheKey: string,
+): DateDistributionResponse {
   const now = Date.now();
   const distributionCache = getDistributionCache(db);
   const cached = distributionCache.get(cacheKey);
@@ -132,11 +144,9 @@ export function getDateDistribution(
 
   // Pull raw publication values only. On low-power storage this is much faster
   // than materializing datetime() for every matching row and grouping in SQLite.
-  const publishedRows = db.prepare(`
-    SELECT Published
-    FROM HitomiColumnModel
-    WHERE ${condition}
-  `).all() as Array<{ Published: number | string | null }>;
+  const publishedRows = db.prepare(publishedSql).all() as Array<{
+    Published: number | string | null;
+  }>;
 
   const dayCounts = new Map<string, number>();
   let invalidCount = 0;
