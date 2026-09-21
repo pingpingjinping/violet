@@ -5,6 +5,7 @@ import {
   normalizedPublishedSql,
   parseDateBounds,
   getDateDistribution,
+  getDateDistributionFromSql,
 } from './publication-date.js';
 
 test('distribution preserves day/year buckets, empty counts, and connection/write isolation', () => {
@@ -81,6 +82,31 @@ test('distribution groups tick and text values on the same UTC day', () => {
     assert.equal(value.minDate, '2025-01-01');
     assert.equal(value.maxDate, '2025-01-01');
     assert.deepEqual(value.buckets.map((bucket) => bucket.count), [2]);
+  } finally {
+    db.close();
+  }
+});
+
+
+test('accepts a prefiltered publication source query', () => {
+  const db = new Database(':memory:');
+  try {
+    db.exec(`
+      CREATE TABLE HitomiColumnModel (Id INTEGER PRIMARY KEY, Published);
+      INSERT INTO HitomiColumnModel VALUES
+        (1, '2024-01-01 00:00:00'),
+        (2, '2025-02-02 00:00:00');
+    `);
+
+    const value = getDateDistributionFromSql(
+      db,
+      'SELECT Published FROM HitomiColumnModel WHERE Id=2',
+      'prefiltered',
+    );
+
+    assert.equal(value.totalCount, 1);
+    assert.equal(value.minDate, '2025-02-02');
+    assert.equal(value.maxDate, '2025-02-02');
   } finally {
     db.close();
   }
