@@ -4,9 +4,13 @@ import { dirname, join } from 'path';
 import { Router } from 'express';
 import { getContentDb, getDbPath, isContentDbReady, isFtsReady } from '../services/content-db.js';
 import { PersistentTagSummaryCache } from '../services/tag-summary-cache.js';
-import { translateQuery, translateQueryCondition } from '../services/query-engine.js';
 import {
-  getDateDistribution,
+  translateDateDistributionQuery,
+  translateQuery,
+  translateQueryCondition,
+} from '../services/query-engine.js';
+import {
+  getDateDistributionFromSql,
   parseDateBounds,
 } from '../services/publication-date.js';
 import {
@@ -160,19 +164,19 @@ contentRouter.get('/search/date-distribution', (req, res) => {
   const startedAt = performance.now();
 
   try {
-    const condition = translateQueryCondition(query, useFts);
-    const value = getDateDistribution(
+    const publishedSql = translateDateDistributionQuery(query, useFts);
+    const value = getDateDistributionFromSql(
       db,
-      condition,
+      publishedSql,
       JSON.stringify([query, useFts]),
     );
     console.log(`[SQL] date-distribution=${(performance.now() - startedAt).toFixed(1)}ms | q="${query}" fts=${useFts} | ${value.buckets.length} buckets`);
     res.json(value);
   } catch {
-    const condition = translateQueryCondition(query, false);
-    const value = getDateDistribution(
+    const publishedSql = translateDateDistributionQuery(query, false);
+    const value = getDateDistributionFromSql(
       db,
-      condition,
+      publishedSql,
       JSON.stringify([query, false]),
     );
     console.log(`[SQL] date-distribution=${(performance.now() - startedAt).toFixed(1)}ms | q="${query}" fts=fallback | ${value.buckets.length} buckets`);
