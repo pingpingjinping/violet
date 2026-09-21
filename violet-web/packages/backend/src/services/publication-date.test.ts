@@ -5,6 +5,7 @@ import {
   normalizedPublishedSql,
   parseDateBounds,
   getDateDistribution,
+  getDateDistributionFromSql,
 } from './publication-date.js';
 
 test('distribution preserves day/year buckets, empty counts, and connection/write isolation', () => {
@@ -50,6 +51,27 @@ test('parses inclusive ISO day bounds and rejects reversed bounds', () => {
   });
   assert.throws(() => parseDateBounds('2022-01-01', '2021-12-31'), /before or equal/);
   assert.throws(() => parseDateBounds('2025-02-30', undefined), /valid calendar/);
+});
+
+test('accepts a prebuilt publication source query', () => {
+  const db = new Database(':memory:');
+  try {
+    db.exec(`
+      CREATE TABLE HitomiColumnModel (Id INTEGER PRIMARY KEY, Published);
+      INSERT INTO HitomiColumnModel VALUES (1, '2024-01-01 00:00:00');
+      INSERT INTO HitomiColumnModel VALUES (2, '2024-02-01 00:00:00');
+    `);
+    const value = getDateDistributionFromSql(
+      db,
+      'SELECT Published FROM HitomiColumnModel WHERE Id=2',
+      'prebuilt',
+    );
+    assert.equal(value.totalCount, 1);
+    assert.equal(value.minDate, '2024-02-01');
+    assert.equal(value.maxDate, '2024-02-01');
+  } finally {
+    db.close();
+  }
 });
 
 test('builds a continuous distribution and counts invalid rows', () => {
