@@ -1,9 +1,109 @@
 package main
 
 import (
+	"net/http"
+	"net/http/cookiejar"
+	"net/url"
 	"strings"
 	"testing"
 )
+
+func makeAuthTestContext(t *testing.T, statusCode int, finalURL string, cookies ...*http.Cookie) (*http.Response, *cookiejar.Jar, *url.URL) {
+	t.Helper()
+
+	baseURL, err := url.Parse("https://exhentai.org/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	requestURL, err := url.Parse(finalURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cookies) > 0 {
+		jar.SetCookies(baseURL, cookies)
+	}
+
+	return &http.Response{
+		StatusCode: statusCode,
+		Request:    &http.Request{URL: requestURL},
+	}, jar, baseURL
+}
+
+func TestClassifyExHentaiAuthValid(t *testing.T) {
+	resp, jar, baseURL := makeAuthTestContext(
+		t,
+		http.StatusOK,
+		"https://exhentai.org/?inline_set=dm_e",
+		&http.Cookie{Name: "igneous", Value: "abc123"},
+	)
+	status, reason := classifyExHentaiAuth(
+		resp,
+		[]byte(`<html><body><table class="itg glte"><tr></tr></table></body></html>`),
+		jar,
+		baseURL,
+	)
+	if status != "valid" || reason != "gallery_list" {
+		t.Fatalf("status=%q reason=%q, want valid/gallery_list", status, reason)
+	}
+}
+
+func TestClassifyExHentaiAuthInvalid(t *testing.T) {
+	t.Run("empty response", func(t *testing.T) {
+		resp, jar, baseURL := makeAuthTestContext(t, http.StatusOK, "https://exhentai.org/")
+		status, reason := classifyExHentaiAuth(resp, nil, jar, baseURL)
+		if status != "invalid" || reason != "empty_response" {
+			t.Fatalf("status=%q reason=%q, want invalid/empty_response", status, reason)
+		}
+	})
+
+	t.Run("invalid igneous", func(t *testing.T) {
+		resp, jar, baseURL := makeAuthTestContext(
+			t,
+			http.StatusOK,
+			"https://exhentai.org/",
+			&http.Cookie{Name: "igneous", Value: "mystery"},
+		)
+		status, reason := classifyExHentaiAuth(resp, []byte("<html>anything</html>"), jar, baseURL)
+		if status != "invalid" || reason != "invalid_igneous" {
+			t.Fatalf("status=%q reason=%q, want invalid/invalid_igneous", status, reason)
+		}
+	})
+
+	t.Run("redirected to e-hentai", func(t *testing.T) {
+		resp, jar, baseURL := makeAuthTestContext(t, http.StatusOK, "https://e-hentai.org/")
+		status, reason := classifyExHentaiAuth(resp, []byte("<html>login</html>"), jar, baseURL)
+		if status != "invalid" || reason != "redirected_to_ehentai" {
+			t.Fatalf("status=%q reason=%q, want invalid/redirected_to_ehentai", status, reason)
+		}
+	})
+}
+
+func TestClassifyExHentaiAuthUnknown(t *testing.T) {
+	t.Run("cloudflare", func(t *testing.T) {
+		resp, jar, baseURL := makeAuthTestContext(t, http.StatusForbidden, "https://exhentai.org/")
+		status, reason := classifyExHentaiAuth(
+			resp,
+			[]byte("<html><title>Just a moment...</title><div>Cloudflare</div></html>"),
+			jar,
+			baseURL,
+		)
+		if status != "unknown" || reason != "cloudflare_challenge" {
+			t.Fatalf("status=%q reason=%q, want unknown/cloudflare_challenge", status, reason)
+		}
+	})
+
+	t.Run("unexpected html", func(t *testing.T) {
+		resp, jar, baseURL := makeAuthTestContext(t, http.StatusOK, "https://exhentai.org/")
+		status, reason := classifyExHentaiAuth(resp, []byte("<html><body>maintenance-ish page</body></html>"), jar, baseURL)
+		if status != "unknown" || reason != "unexpected_response" {
+			t.Fatalf("status=%q reason=%q, want unknown/unexpected_response", status, reason)
+		}
+	})
+}
 
 func TestGetEHID(t *testing.T) {
 	art := &EHArticle{URL: "https://exhentai.org/g/3217489/abcdef1234/"}
