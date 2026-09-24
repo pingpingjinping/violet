@@ -24,7 +24,17 @@ settingsRouter.get('/exhentai-cookie', (_req, res) => {
 });
 
 settingsRouter.get('/exhentai-auth-status', (_req, res) => {
-  res.json(getExHentaiAuthStatus());
+  try {
+    const auth = getExHentaiAuthStatus();
+    const cookie = getEhCookieStatus();
+    res.json({
+      ...auth,
+      configured: cookie.configured,
+      source: cookie.source,
+    });
+  } catch {
+    res.status(500).json({ error: 'Failed to read ExHentai auth status' });
+  }
 });
 
 settingsRouter.put('/exhentai-cookie', requireSyncToken, (req, res) => {
