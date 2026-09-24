@@ -11,6 +11,7 @@ import {
   getEhAutoLoginStatus,
   refreshEhCookieNow,
 } from '../services/eh-auto-login.js';
+import { getExHentaiAuthStatus } from '../services/exhentai-auth-status.js';
 
 export const settingsRouter = Router();
 
@@ -20,6 +21,10 @@ settingsRouter.get('/exhentai-cookie', (_req, res) => {
   } catch {
     res.status(500).json({ error: 'Failed to read cookie settings' });
   }
+});
+
+settingsRouter.get('/exhentai-auth-status', (_req, res) => {
+  res.json(getExHentaiAuthStatus());
 });
 
 settingsRouter.put('/exhentai-cookie', requireSyncToken, (req, res) => {
