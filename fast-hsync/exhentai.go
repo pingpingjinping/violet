@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -9,6 +10,7 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +20,7 @@ import (
 
 const (
 	defaultEHCookie          = ""
+	ehAuthStatusPathEnv      = "EXHENTAI_AUTH_STATUS_PATH"
 	ehRequestDelay           = 1 * time.Second
 	ehLongDelay              = 120 * time.Second
 	ehLongDelayInterval      = 100
@@ -28,6 +31,111 @@ const (
 	expungedPreviousMinID            = 4000000
 	expungedPreviousBackfillStateKey = "exhentai_expunged_backfill_4000000"
 )
+
+type ExHentaiAuthStatus struct {
+	Status    string `json:"status"`
+	CheckedAt string `json:"checkedAt"`
+	Reason    string `json:"reason,omitempty"`
+}
+
+func writeExHentaiAuthStatus(status, reason string) {
+	statusPath := strings.TrimSpace(os.Getenv(ehAuthStatusPathEnv))
+	if statusPath == "" {
+		return
+	}
+
+	payload, err := json.Marshal(ExHentaiAuthStatus{
+		Status:    status,
+		CheckedAt: time.Now().UTC().Format(time.RFC3339),
+		Reason:    reason,
+	})
+	if err != nil {
+		log.Printf("[exhentai-auth] failed to encode status: %v", err)
+		return
+	}
+
+	if err := os.MkdirAll(filepath.Dir(statusPath), 0755); err != nil {
+		log.Printf("[exhentai-auth] failed to create status directory: %v", err)
+		return
+	}
+
+	temporary := statusPath + ".tmp"
+	if err := os.WriteFile(temporary, append(payload, '\n'), 0644); err != nil {
+		log.Printf("[exhentai-auth] failed to write status: %v", err)
+		return
+	}
+	if err := os.Rename(temporary, statusPath); err != nil {
+		_ = os.Remove(temporary)
+		log.Printf("[exhentai-auth] failed to replace status: %v", err)
+		return
+	}
+
+	log.Printf("[exhentai-auth] status=%s reason=%s", status, reason)
+}
+
+func classifyExHentaiAuth(resp *http.Response, body []byte, jar http.CookieJar, baseURL *url.URL) (string, string) {
+	if resp == nil {
+		return "unknown", "missing_response"
+	}
+
+	lower := strings.ToLower(string(body))
+	if strings.Contains(lower, "just a moment") ||
+		strings.Contains(lower, "performing security verification") ||
+		strings.Contains(lower, "cf-chl-") ||
+		strings.Contains(lower, "cloudflare") {
+		return "unknown", "cloudflare_challenge"
+	}
+
+	if resp.StatusCode == http.StatusForbidden ||
+		resp.StatusCode == http.StatusTooManyRequests ||
+		resp.StatusCode >= 500 {
+		return "unknown", fmt.Sprintf("http_%d", resp.StatusCode)
+	}
+
+	if resp.Request != nil && resp.Request.URL != nil {
+		finalHost := strings.ToLower(resp.Request.URL.Hostname())
+		if finalHost != "" && finalHost != "exhentai.org" {
+			if finalHost == "e-hentai.org" || strings.HasSuffix(finalHost, ".e-hentai.org") {
+				return "invalid", "redirected_to_ehentai"
+			}
+			return "unknown", "unexpected_redirect"
+		}
+	}
+
+	if jar != nil && baseURL != nil {
+		for _, cookie := range jar.Cookies(baseURL) {
+			if cookie.Name != "igneous" {
+				continue
+			}
+			switch strings.ToLower(strings.TrimSpace(cookie.Value)) {
+			case "mystery", "deleted", "null":
+				return "invalid", "invalid_igneous"
+			}
+		}
+	}
+
+	if strings.TrimSpace(string(body)) == "" {
+		return "invalid", "empty_response"
+	}
+	if strings.Contains(lower, "sad panda") || strings.Contains(lower, "sadpanda") {
+		return "invalid", "sad_panda"
+	}
+	if strings.Contains(lower, "you must be logged in") ||
+		strings.Contains(lower, "please log in") {
+		return "invalid", "login_required"
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "unknown", fmt.Sprintf("http_%d", resp.StatusCode)
+	}
+
+	if strings.Contains(lower, `class="itg glte"`) ||
+		strings.Contains(lower, `class='itg glte'`) {
+		return "valid", "gallery_list"
+	}
+
+	return "unknown", "unexpected_response"
+}
 
 // EHArticle represents a parsed exhentai gallery entry.
 type EHArticle struct {
@@ -103,11 +211,21 @@ func newExHentaiClient(cookie string) (*http.Client, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
+		writeExHentaiAuthStatus("unknown", "request_error")
 		return nil, err
 	}
-	_, _ = io.Copy(io.Discard, resp.Body)
+	body, readErr := io.ReadAll(resp.Body)
 	resp.Body.Close()
+	if readErr != nil {
+		writeExHentaiAuthStatus("unknown", "read_error")
+		return nil, readErr
+	}
 
+	status, reason := classifyExHentaiAuth(resp, body, jar, baseURL)
+	writeExHentaiAuthStatus(status, reason)
+
+	// Auth classification is observational only. Preserve the previous sync
+	// behavior: only the HTTP status itself can stop client initialization.
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("ExHentai display-mode request returned HTTP %d", resp.StatusCode)
 	}
