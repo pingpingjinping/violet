@@ -42,7 +42,9 @@ func TestClassifyExHentaiAuthValid(t *testing.T) {
 	)
 	status, reason := classifyExHentaiAuth(
 		resp,
-		[]byte(`<html><body><table class="itg glte"><tr></tr></table></body></html>`),
+		[]byte(`<html><body><div>Cloudflare</div><table class="itg glte">
+		<tr><td><a href="https://exhentai.org/g/3217489/abc123def/"></a></td><td><div><div></div><a><div><div>Title</div></div></a></div></td></tr>
+		</table></body></html>`),
 		jar,
 		baseURL,
 	)
