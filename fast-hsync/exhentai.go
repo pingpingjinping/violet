@@ -223,8 +223,11 @@ func newExHentaiClient(cookie string) (*http.Client, error) {
 
 	status, reason := classifyExHentaiAuth(resp, body, jar, baseURL)
 	writeExHentaiAuthStatus(status, reason)
-	if status != "valid" {
-		return nil, fmt.Errorf("ExHentai authentication status %s (%s)", status, reason)
+
+	// Auth classification is observational only. Preserve the previous sync
+	// behavior: only the HTTP status itself can stop client initialization.
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("ExHentai display-mode request returned HTTP %d", resp.StatusCode)
 	}
 
 	return client, nil
