@@ -10,8 +10,8 @@ services:
         task_started="$$task_state_dir/.violet-hsync-started-at"
         task_completed="$$task_state_dir/.violet-hsync-completed-at"
         task_error="$$task_state_dir/.violet-hsync-error"
-        task_snapshot_request="$task_state_dir/.violet-snapshot-request"
-        task_auth_status="$task_state_dir/.violet-exhentai-auth-status.json"
+        task_snapshot_request="$$task_state_dir/.violet-snapshot-request"
+        task_auth_status="$$task_state_dir/.violet-exhentai-auth-status.json"
 
         last_slot=""
 
@@ -27,12 +27,12 @@ services:
 
           if [ -s /web-data/exhentai-cookie.txt ]; then
             echo "[fast-hsync] ExHentai cookie found; ExHentai sync enabled"
-            EXHENTAI_AUTH_STATUS_PATH="$task_auth_status" \
-              COOKIE="$(cat /web-data/exhentai-cookie.txt)" \
+            EXHENTAI_AUTH_STATUS_PATH="$$task_auth_status" \
+              COOKIE="$$(cat /web-data/exhentai-cookie.txt)" \
               fast-hsync /content-data/data.db --with-exh
           else
-            checked_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            printf '{"status":"unknown","checkedAt":"%s","reason":"cookie_not_configured"}\n' "$checked_at" > "$task_auth_status"
+            checked_at="$$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            printf '{"status":"unknown","checkedAt":"%s","reason":"cookie_not_configured"}\n' "$$checked_at" > "$$task_auth_status"
             echo "[fast-hsync] ExHentai cookie not found; Hitomi-only sync"
             fast-hsync /content-data/data.db
           fi
