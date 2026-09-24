@@ -79,10 +79,17 @@ func classifyExHentaiAuth(resp *http.Response, body []byte, jar http.CookieJar, 
 	}
 
 	lower := strings.ToLower(string(body))
+
+	// A successfully parsed gallery list is the strongest proof that the
+	// current cookie can access ExHentai. Normal ExHentai HTML may contain
+	// Cloudflare-related text/assets, so do this before challenge heuristics.
+	if len(parseExHentaiExtendedList(string(body))) > 0 {
+		return "valid", "gallery_list"
+	}
+
 	if strings.Contains(lower, "just a moment") ||
 		strings.Contains(lower, "performing security verification") ||
-		strings.Contains(lower, "cf-chl-") ||
-		strings.Contains(lower, "cloudflare") {
+		strings.Contains(lower, "cf-chl-") {
 		return "unknown", "cloudflare_challenge"
 	}
 
@@ -127,11 +134,6 @@ func classifyExHentaiAuth(resp *http.Response, body []byte, jar http.CookieJar, 
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "unknown", fmt.Sprintf("http_%d", resp.StatusCode)
-	}
-
-	if strings.Contains(lower, `class="itg glte"`) ||
-		strings.Contains(lower, `class='itg glte'`) {
-		return "valid", "gallery_list"
 	}
 
 	return "unknown", "unexpected_response"
@@ -476,6 +478,15 @@ func crawlExHentai(client *http.Client, db *sql.DB, expunged bool) []*EHArticle 
 		}
 
 		parsed := parseExHentaiExtendedList(string(body))
+		if page == 0 && !expunged {
+			if len(parsed) > 0 {
+				writeExHentaiAuthStatus("valid", "gallery_list")
+			} else {
+				baseURL, _ := url.Parse("https://exhentai.org/")
+				status, reason := classifyExHentaiAuth(resp, body, client.Jar, baseURL)
+				writeExHentaiAuthStatus(status, reason)
+			}
+		}
 		if len(parsed) == 0 {
 			log.Printf("[%s] page %d: no results, stopping", label, page)
 			flushCheckpoint()
