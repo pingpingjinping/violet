@@ -9,9 +9,11 @@ import { useSuggestions } from '../hooks/useSuggestions';
 import { useTagTranslation } from '../hooks/useTagTranslation';
 import { getCacheStats, clearAllCache } from '../services/image-cache';
 import {
+  getExhentaiAuthStatus,
   getExhentaiCookieStatus,
   removeExhentaiCookie,
   saveExhentaiCookie,
+  type ExhentaiAuthStatus,
   type ExhentaiCookieStatus,
 } from '../api/exhentai-cookie';
 import styles from './SettingsPage.module.css';
@@ -47,6 +49,7 @@ export function SettingsPage() {
     configured: false,
     source: null,
   });
+  const [exhentaiAuthStatus, setExhentaiAuthStatus] = useState<ExhentaiAuthStatus | null>(null);
   const [exhentaiCookieBusy, setExhentaiCookieBusy] = useState(false);
   const [exhentaiCookieMessage, setExhentaiCookieMessage] = useState<
     'saved' | 'removed' | 'error' | null
@@ -57,6 +60,9 @@ export function SettingsPage() {
     getExhentaiCookieStatus()
       .then(setExhentaiCookieStatus)
       .catch(() => setExhentaiCookieMessage('error'));
+    getExhentaiAuthStatus()
+      .then(setExhentaiAuthStatus)
+      .catch(() => setExhentaiAuthStatus(null));
   }, []);
 
   const handleSaveExhentaiCookie = async () => {
@@ -74,6 +80,9 @@ export function SettingsPage() {
       setExhentaiPassHash('');
       setExhentaiIgneous('');
       setExhentaiCookieMessage('saved');
+      getExhentaiAuthStatus()
+        .then(setExhentaiAuthStatus)
+        .catch(() => setExhentaiAuthStatus(null));
     } catch {
       setExhentaiCookieMessage('error');
     } finally {
@@ -91,6 +100,9 @@ export function SettingsPage() {
       setExhentaiPassHash('');
       setExhentaiIgneous('');
       setExhentaiCookieMessage('removed');
+      getExhentaiAuthStatus()
+        .then(setExhentaiAuthStatus)
+        .catch(() => setExhentaiAuthStatus(null));
     } catch {
       setExhentaiCookieMessage('error');
     } finally {
@@ -558,6 +570,28 @@ export function SettingsPage() {
               {exhentaiCookieStatus.configured
                 ? t('settings.exhentaiCookie.configured')
                 : t('settings.exhentaiCookie.notConfigured')}
+            </span>
+          </div>
+          <div className={styles.infoRow}>
+            <span className={styles.label}>{t('settings.exhentaiCookie.authStatus')}</span>
+            <span
+              className={
+                exhentaiAuthStatus?.status === 'valid'
+                  ? styles.statusOk
+                  : exhentaiAuthStatus?.status === 'invalid'
+                    ? styles.statusError
+                    : styles.statusDetail
+              }
+            >
+              {!exhentaiAuthStatus
+                ? t('settings.exhentaiCookie.authNoRecord')
+                : exhentaiAuthStatus.status === 'valid'
+                  ? t('settings.exhentaiCookie.authValid')
+                  : exhentaiAuthStatus.status === 'invalid'
+                    ? t('settings.exhentaiCookie.authInvalid')
+                    : exhentaiAuthStatus.available
+                      ? t('settings.exhentaiCookie.authUnknown')
+                      : t('settings.exhentaiCookie.authNoRecord')}
             </span>
           </div>
           {exhentaiCookieStatus.source && (
