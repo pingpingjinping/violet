@@ -452,9 +452,9 @@ func crawlExHentai(client *http.Client, db *sql.DB, expunged bool) []*EHArticle 
 	}
 
 	for page := 0; ; page++ {
-		url := exHentaiBrowseURL(next, expunged)
+		browseURL := exHentaiBrowseURL(next, expunged)
 
-		req, err := http.NewRequest("GET", url, nil)
+		req, err := http.NewRequest("GET", browseURL, nil)
 		if err != nil {
 			log.Printf("[%s] page %d: request error: %v", label, page, err)
 			flushCheckpoint()
