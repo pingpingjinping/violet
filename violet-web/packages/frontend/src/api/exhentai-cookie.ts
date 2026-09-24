@@ -5,6 +5,18 @@ export interface ExhentaiCookieStatus {
   source: 'stored' | 'environment' | null;
 }
 
+export interface ExhentaiAuthStatus extends ExhentaiCookieStatus {
+  available: boolean;
+  status: 'valid' | 'invalid' | 'unknown';
+  reason: string | null;
+  checkedAt: string | null;
+}
+
+export async function getExhentaiAuthStatus(): Promise<ExhentaiAuthStatus> {
+  const { data } = await api.get<ExhentaiAuthStatus>('/settings/exhentai-auth-status');
+  return data;
+}
+
 export async function getExhentaiCookieStatus(): Promise<ExhentaiCookieStatus> {
   const { data } = await api.get<ExhentaiCookieStatus>('/settings/exhentai-cookie');
   return data;
