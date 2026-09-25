@@ -10,7 +10,7 @@ export const DEFAULT_PERSISTENT_SEARCH_QUERY =
 const CACHE_VERSION = 1;
 const REVISION_KEY = 'web_search_stats_revision';
 
-type PersistentSearchStats = {
+export type PersistentSearchStats = {
   version: number;
   query: string;
   revision: string;
