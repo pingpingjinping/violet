@@ -19,12 +19,12 @@ export function runThumbnail<T>(signal: AbortSignal, work: () => Promise<T>): Pr
       active++;
       Promise.resolve().then(work).then(resolve, reject).finally(() => {
         active--;
-        while (active < 3 && waiting.length) waiting.shift()!();
+        while (active < 6 && waiting.length) waiting.shift()!();
       });
     };
     if (signal.aborted) { reject(aborted()); return; }
     signal.addEventListener('abort', cancel, { once: true });
-    if (active < 3) start();
+    if (active < 6) start();
     else waiting.push(start);
   });
 }
