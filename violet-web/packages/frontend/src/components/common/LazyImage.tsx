@@ -7,15 +7,20 @@ interface LazyImageProps {
   className?: string;
   onClick?: () => void;
   onLoad?: () => void;
+  eager?: boolean;
 }
 
-export function LazyImage({ src, alt = '', className, onClick, onLoad }: LazyImageProps) {
+export function LazyImage({ src, alt = '', className, onClick, onLoad, eager = false }: LazyImageProps) {
   const [loaded, setLoaded] = useState(false);
-  const [inView, setInView] = useState(false);
+  const [inView, setInView] = useState(eager);
   const [error, setError] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (eager) {
+      setInView(true);
+      return;
+    }
     const el = ref.current;
     if (!el) return;
 
@@ -31,7 +36,7 @@ export function LazyImage({ src, alt = '', className, onClick, onLoad }: LazyIma
 
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [eager]);
 
   const retry = () => {
     setError(false);
@@ -47,7 +52,7 @@ export function LazyImage({ src, alt = '', className, onClick, onLoad }: LazyIma
           className={`${styles.image} ${loaded ? styles.loaded : ''}`}
           onLoad={() => { setLoaded(true); onLoad?.(); }}
           onError={() => setError(true)}
-          loading="lazy"
+          loading={eager ? 'eager' : 'lazy'}
         />
       )}
       {error && (
