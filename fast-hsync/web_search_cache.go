@@ -300,6 +300,9 @@ func normalizePublishedString(value string) (string, bool) {
 	if len(value) < 10 {
 		return "", false
 	}
+	if len(value) > 10 && value[10] != ' ' && value[10] != 'T' {
+		return "", false
+	}
 	day := value[:10]
 	parsed, err := time.Parse("2006-01-02", day)
 	if err != nil || parsed.Format("2006-01-02") != day {
