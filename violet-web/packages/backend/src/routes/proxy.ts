@@ -23,7 +23,7 @@ async function resolveThumbnail(id: number): Promise<string | undefined> {
       thumbnailActive++;
     }
     try {
-      return (await resolveGallery(id)).bigThumbnails?.[0];
+      return (await resolveGallery(id)).smallThumbnails?.[0] ?? (await resolveGallery(id)).bigThumbnails?.[0];
     } finally {
       const next = thumbnailWaiters.shift();
       if (next) next();
