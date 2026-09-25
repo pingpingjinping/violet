@@ -147,7 +147,7 @@ export const ArticleCard = memo(function ArticleCard({ article, viewMode = 'grid
       >
         <div className={styles.imageWrapper}>
           {thumbnailSrc ? (
-            <LazyImage src={thumbnailSrc} alt={article.Title} className={styles.image} onLoad={onThumbnailLoad} />
+            <LazyImage src={thumbnailSrc} alt={article.Title} className={styles.image} onLoad={onThumbnailLoad} eager />
           ) : (
             <div className={styles.noImage}>{t('article.noImage')}</div>
           )}
