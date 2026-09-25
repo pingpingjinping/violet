@@ -4,6 +4,7 @@ import { dirname, join } from 'path';
 import { Router } from 'express';
 import { getContentDb, getDbPath, isContentDbReady, isFtsReady } from '../services/content-db.js';
 import { PersistentTagSummaryCache } from '../services/tag-summary-cache.js';
+import { getPersistentDefaultSearchStats } from '../services/persistent-search-stats.js';
 import { translatePublicationQuery, translateQuery, translateTagSummaryQuery } from '../services/query-engine.js';
 import {
   getDateDistributionFromSql,
@@ -135,10 +136,20 @@ contentRouter.get('/search', (req, res) => {
   const db = getContentDb();
   const useFts = isFtsReady();
   const { sql, countSql } = translateQuery(query, page, pageSize, useFts, dateRange);
+  const persistentStats = !from && !to
+    ? getPersistentDefaultSearchStats(db, query, useFts)
+    : null;
   const started = performance.now();
   try {
-    const { result, cacheHit } = getCachedSearchResult(db, sql, countSql, page, pageSize);
-    console.log(`[SQL] search=${(performance.now() - started).toFixed(1)}ms cached=${cacheHit} | q="${query}" fts=${useFts} | ${result.totalCount} results`);
+    const { result, cacheHit } = getCachedSearchResult(
+      db,
+      sql,
+      countSql,
+      page,
+      pageSize,
+      persistentStats?.totalCount,
+    );
+    console.log(`[SQL] search=${(performance.now() - started).toFixed(1)}ms cached=${cacheHit} persistentCount=${Boolean(persistentStats)} | q="${query}" fts=${useFts} | ${result.totalCount} results`);
     res.json(result);
   } catch {
     const fallback = translateQuery(query, page, pageSize, false, dateRange);
@@ -158,6 +169,12 @@ contentRouter.get('/search/date-distribution', (req, res) => {
   const db = getContentDb();
   const useFts = isFtsReady();
   const startedAt = performance.now();
+  const persistentStats = getPersistentDefaultSearchStats(db, query, useFts);
+  if (persistentStats) {
+    console.log(`[SQL] date-distribution=${(performance.now() - startedAt).toFixed(1)}ms persistent=true | q="${query}" fts=${useFts} | ${persistentStats.dateDistribution.buckets.length} buckets`);
+    res.json(persistentStats.dateDistribution);
+    return;
+  }
 
   try {
     const publication = translatePublicationQuery(query, useFts);
