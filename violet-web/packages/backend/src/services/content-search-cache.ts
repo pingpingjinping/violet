@@ -45,6 +45,7 @@ export function getCachedSearchResult(
   countSql: string,
   page: number,
   pageSize: number,
+  precomputedTotalCount?: number,
 ): { result: ArticleSearchResult; cacheHit: boolean } {
   const cache = getCache(db);
   const key = JSON.stringify([sql, countSql, page, pageSize]);
@@ -64,7 +65,7 @@ export function getCachedSearchResult(
   const pageMs = performance.now() - pageStartedAt;
 
   const countStartedAt = performance.now();
-  const totalCount = countRows(db, countSql, cache);
+  const totalCount = precomputedTotalCount ?? countRows(db, countSql, cache);
   const countMs = performance.now() - countStartedAt;
 
   console.log(
