@@ -52,6 +52,11 @@ func main() {
 	db, latestID := initDB(opts)
 	defer db.Close()
 
+	webStatsRevision := newWebSearchStatsRevision()
+	if err := markWebSearchStatsRefreshing(db, webStatsRevision); err != nil {
+		log.Printf("Failed to mark web search stats as refreshing: %v", err)
+	}
+
 	// Phase 1: Download gallery blocks (skip existing unless --force)
 	var existingIDs map[int]bool
 	if !opts.forceAll {
@@ -91,7 +96,13 @@ func main() {
 		log.Fatalf("Failed to maintain search indexes: %v", err)
 	}
 
-	// Phase 9: Save chunk output
+	// Phase 9: Refresh persistent stats used by the default web search.
+	// Failure is non-fatal: the web server will fall back to the existing SQL path.
+	if err := refreshWebSearchStats(db, opts.dbPath, webStatsRevision); err != nil {
+		log.Printf("Failed to refresh web search stats: %v", err)
+	}
+
+	// Phase 10: Save chunk output
 	saveChunk(toUpsert)
 	log.Printf("Sync complete! Upserted %d records.", len(toUpsert))
 }
