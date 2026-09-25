@@ -23,7 +23,8 @@ async function resolveThumbnail(id: number): Promise<string | undefined> {
       thumbnailActive++;
     }
     try {
-      return (await resolveGallery(id)).smallThumbnails?.[0] ?? (await resolveGallery(id)).bigThumbnails?.[0];
+      const gallery = await resolveGallery(id);
+      return gallery.smallThumbnails?.[0] ?? gallery.bigThumbnails?.[0];
     } finally {
       const next = thumbnailWaiters.shift();
       if (next) next();
@@ -83,7 +84,7 @@ proxyRouter.get('/thumbnail/:id', async (req, res, next) => {
       return;
     }
 
-    // Resolve gallery and extract first big thumbnail
+    // Resolve gallery and prefer the smaller card thumbnail
     const thumbnailUrl = await resolveThumbnail(id);
 
     if (!thumbnailUrl) {
