@@ -59,8 +59,18 @@ export function getCachedSearchResult(
     const entry = cache.results.get(key);
     if (entry) return { result: JSON.parse(entry.json) as ArticleSearchResult, cacheHit: true };
   }
+  const pageStartedAt = performance.now();
   const articles = db.prepare(sql).all() as Article[];
+  const pageMs = performance.now() - pageStartedAt;
+
+  const countStartedAt = performance.now();
   const totalCount = countRows(db, countSql, cache);
+  const countMs = performance.now() - countStartedAt;
+
+  console.log(
+    `[SQL] search-parts page=${pageMs.toFixed(1)}ms count=${countMs.toFixed(1)}ms`,
+  );
+
   const result = { articles, totalCount, page, pageSize };
   if (cache) {
     const json = JSON.stringify(result);

@@ -9,14 +9,94 @@ import { normalizedPublishedSql, parseDateBounds } from './publication-date.js';
 
 const visibleGalleryCondition = "(ExistOnHitomi=1 OR Tags LIKE '%|expunged|%')";
 
-export function translateQuery(
+type QueryParts = {
+  where: string;
+  negFts: string;
+  blockedFtsSql: string | null;
+  bypassVisibility: boolean;
+};
+
+function translateQueryParts(
   query: string,
-  page: number,
-  pageSize: number,
   useFts: boolean = false,
+): QueryParts {
+  query = query.trim();
+
+  // Numeric ID query
+  const nn = parseInt(query.split(' ')[0]);
+  if (!isNaN(nn) && query.split(' ')[0] === String(nn)) {
+    return {
+      where: `Id=${nn}`,
+      negFts: '',
+      blockedFtsSql: null,
+      bypassVisibility: true,
+    };
+  }
+
+  if (query === '') {
+    return {
+      where: '1=1',
+      negFts: '',
+      blockedFtsSql: null,
+      bypassVisibility: false,
+    };
+  }
+
+  const tokens = splitTokens(query)
+    .map((x) => x.trim())
+    .filter((x) => x !== '');
+  const translator = new QueryTranslator(tokens, useFts);
+  const where = translator.parseExpression() || '1=1';
+  return {
+    where,
+    negFts: translator.getNegFtsClause(),
+    blockedFtsSql: translator.getBlockedFtsSql(),
+    bypassVisibility: false,
+  };
+}
+
+function buildVisibleCte(
+  cteName: string,
+  columns: string,
+  condition: string,
+  bypassVisibility: boolean = false,
+): string {
+  if (bypassVisibility) {
+    return `${cteName} AS NOT MATERIALIZED (
+      SELECT ${columns}
+      FROM HitomiColumnModel
+      WHERE ${condition}
+    )`;
+  }
+
+  return `${cteName} AS NOT MATERIALIZED (
+    SELECT ${columns}
+    FROM HitomiColumnModel
+    WHERE ExistOnHitomi=1
+      AND (${condition})
+
+    UNION ALL
+
+    SELECT ${columns}
+    FROM HitomiColumnModel
+    WHERE ExistOnHitomi=0
+      AND Tags LIKE '%|expunged|%'
+      AND (${condition})
+  )`;
+}
+
+function buildSearchCondition(
+  query: string,
+  useFts: boolean,
   dateRange: SearchDateRange = {},
-): { sql: string; countSql: string } {
-  const baseCondition = translateQueryCondition(query, useFts);
+): {
+  condition: string;
+  negFts: string;
+  blockedFtsSql: string | null;
+  bypassVisibility: boolean;
+} {
+  const { where, negFts, blockedFtsSql, bypassVisibility } =
+    translateQueryParts(query, useFts);
   const parsed = parseDateBounds(dateRange.from, dateRange.to);
   const normalized = `(${normalizedPublishedSql('Published')})`;
   const dateCondition = [
@@ -24,38 +104,145 @@ export function translateQuery(
     parsed.toExclusive ? `${normalized} < '${parsed.toExclusive}'` : '',
   ].filter(Boolean).join(' AND ');
   const condition = dateCondition
-    ? `(${baseCondition}) AND ${dateCondition}`
-    : baseCondition;
+    ? `(${where}) AND ${dateCondition}`
+    : where;
+  return { condition, negFts, blockedFtsSql, bypassVisibility };
+}
+
+export function translateQuery(
+  query: string,
+  page: number,
+  pageSize: number,
+  useFts: boolean = false,
+  dateRange: SearchDateRange = {},
+): { sql: string; countSql: string } {
+  const { condition, negFts, blockedFtsSql, bypassVisibility } =
+    buildSearchCondition(query, useFts, dateRange);
+  const visibleIds = buildVisibleCte(
+    'visible_ids',
+    'Id',
+    condition,
+    bypassVisibility,
+  );
+  const filteredWhere = `1=1${negFts}`;
+  const offset = page * pageSize;
+
+  const countSql = blockedFtsSql && !bypassVisibility
+    ? `WITH blocked AS MATERIALIZED (
+        ${blockedFtsSql}
+      )
+      SELECT (
+        SELECT COUNT(*)
+        FROM HitomiColumnModel
+        WHERE ExistOnHitomi=1
+          AND (${condition})
+      ) + (
+        SELECT COUNT(*)
+        FROM HitomiColumnModel
+        WHERE ExistOnHitomi=0
+          AND Tags LIKE '%|expunged|%'
+          AND (${condition})
+      ) - (
+        SELECT COUNT(*)
+        FROM blocked b
+        JOIN (
+          SELECT Id
+          FROM HitomiColumnModel
+          WHERE ExistOnHitomi=1
+            AND (${condition})
+        ) matched ON matched.Id=b.Id
+      ) AS cnt`
+    : `WITH ${visibleIds}
+      SELECT COUNT(*) as cnt
+      FROM visible_ids
+      WHERE ${filteredWhere}`;
+
   return {
-    sql: `SELECT * FROM HitomiColumnModel WHERE ${condition} ORDER BY Id DESC LIMIT ${pageSize} OFFSET ${page * pageSize}`,
-    countSql: `SELECT COUNT(*) as cnt FROM HitomiColumnModel WHERE ${condition}`,
+    sql: `WITH ${visibleIds},
+      page_ids AS (
+        SELECT Id
+        FROM visible_ids
+        WHERE ${filteredWhere}
+        ORDER BY Id DESC
+        LIMIT ${pageSize} OFFSET ${offset}
+      )
+      SELECT h.*
+      FROM page_ids p
+      JOIN HitomiColumnModel h ON h.Id=p.Id
+      ORDER BY h.Id DESC`,
+    countSql,
   };
+}
+
+export function translatePublicationQuery(
+  query: string,
+  useFts: boolean = false,
+): { baseSql: string; blockedSql: string | null } {
+  const { where, negFts, blockedFtsSql, bypassVisibility } =
+    translateQueryParts(query, useFts);
+  const visibleDates = buildVisibleCte(
+    'visible_dates',
+    'Id, Published',
+    where,
+    bypassVisibility,
+  );
+
+  if (!blockedFtsSql || !/\bLanguage\s*=\s*'/.test(where)) {
+    return {
+      baseSql: `WITH ${visibleDates}
+        SELECT Published
+        FROM visible_dates
+        WHERE 1=1${negFts}`,
+      blockedSql: null,
+    };
+  }
+
+  return {
+    baseSql: `WITH ${visibleDates}
+      SELECT Published
+      FROM visible_dates`,
+    blockedSql: `WITH blocked AS MATERIALIZED (
+        ${blockedFtsSql}
+      )
+      SELECT h.Published
+      FROM HitomiColumnModel h INDEXED BY idx_language_exist_published
+      WHERE h.ExistOnHitomi=1
+        AND (${where})
+        AND h.Id IN (SELECT Id FROM blocked)`,
+  };
+}
+
+export function translateTagSummaryQuery(
+  query: string,
+  useFts: boolean = false,
+): string {
+  const { where, negFts, bypassVisibility } =
+    translateQueryParts(query, useFts);
+  const visibleIds = buildVisibleCte(
+    'visible_ids',
+    'Id',
+    where,
+    bypassVisibility,
+  );
+  return `WITH ${visibleIds},
+    filtered_ids AS NOT MATERIALIZED (
+      SELECT Id
+      FROM visible_ids
+      WHERE 1=1${negFts}
+    )
+    SELECT h.Artists, h.Series, h.Characters, h.Groups, h.Tags
+    FROM filtered_ids v
+    JOIN HitomiColumnModel h ON h.Id=v.Id`;
 }
 
 export function translateQueryCondition(
   query: string,
   useFts: boolean = false,
 ): string {
-  query = query.trim();
-
-  // Numeric ID query
-  const nn = parseInt(query.split(' ')[0]);
-  if (!isNaN(nn) && query.split(' ')[0] === String(nn)) {
-    return `Id=${nn}`;
-  }
-
-  if (query === '') {
-    return visibleGalleryCondition;
-  }
-
-  const tokens = splitTokens(query)
-    .map((x) => x.trim())
-    .filter((x) => x !== '');
-  const translator = new QueryTranslator(tokens, useFts);
-  const where = translator.parseExpression();
-  const negFts = translator.getNegFtsClause();
-
-  return `${where}${negFts} AND ${visibleGalleryCondition}`;
+  const { where, negFts, bypassVisibility } =
+    translateQueryParts(query, useFts);
+  if (bypassVisibility) return `(${where})${negFts}`;
+  return `(${where})${negFts} AND ${visibleGalleryCondition}`;
 }
 
 function splitTokens(input: string): string[] {
@@ -90,6 +277,20 @@ class QueryTranslator {
   constructor(tokens: string[], useFts: boolean = false) {
     this.tokens = tokens;
     this.useFts = useFts;
+  }
+
+  getBlockedFtsSql(): string | null {
+    if (this.negFtsBatch.size === 0) return null;
+    const selects: string[] = [];
+    for (const [col, terms] of this.negFtsBatch) {
+      if (terms.length === 1) {
+        selects.push(`SELECT rowid AS Id FROM FtsTags WHERE ${col} MATCH '"${terms[0]}"'`);
+      } else {
+        const matchExpr = terms.map((t) => `"${t}"`).join(' OR ');
+        selects.push(`SELECT rowid AS Id FROM FtsTags WHERE ${col} MATCH '${matchExpr}'`);
+      }
+    }
+    return selects.join('\nUNION\n');
   }
 
   /** Combined negative FTS conditions (appended after main WHERE clause) */
