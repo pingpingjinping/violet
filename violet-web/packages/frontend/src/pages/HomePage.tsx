@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useSearch, useInfiniteSearch } from '../hooks/useSearch';
 import { useAppStore } from '../stores/app-store';
 import { usePaginationKeyboard } from '../hooks/usePaginationKeyboard';
+import { parseSearchPage } from '../hooks/search-page-model';
 import { useResultGridKeyboard } from '../hooks/useResultGridKeyboard';
 import { SearchResultGrid } from '../components/search/SearchResultGrid';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
@@ -14,7 +15,7 @@ export function HomePage() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get('q') || '';
-  const page = parseInt(searchParams.get('p') || '0');
+  const page = parseSearchPage(searchParams.get('p'));
   const from = searchParams.get('from') || undefined;
   const to = searchParams.get('to') || undefined;
   const dateRange = { from, to };
@@ -61,17 +62,25 @@ export function HomePage() {
     data: infiniteData,
     isLoading: infiniteLoading,
     hasNextPage,
+    hasPreviousPage,
     isFetchingNextPage,
+    isFetchingPreviousPage,
     fetchNextPage,
+    fetchPreviousPage,
   } = useInfiniteSearch(
     scrollMode === 'infinite' ? (fullQuery || ' ') : '',
     30,
     { dateRange },
+    page,
   );
 
   const handleLoadMore = useCallback(() => {
-    fetchNextPage();
+    void fetchNextPage();
   }, [fetchNextPage]);
+
+  const handleLoadPrevious = useCallback(() => {
+    void fetchPreviousPage();
+  }, [fetchPreviousPage]);
 
   const totalPages = data ? Math.ceil(data.totalCount / data.pageSize) : 0;
   const lastTotalPagesRef = useRef(0);
@@ -94,9 +103,14 @@ export function HomePage() {
       <div className={styles.page}>
         {infiniteLoading && !infiniteData && <LoadingSpinner />}
         <InfiniteScroll
+          key={[fullQuery, page, from, to].join('|')}
           hasMore={!!hasNextPage}
           loading={isFetchingNextPage}
           onLoadMore={handleLoadMore}
+          hasPrevious={!!hasPreviousPage}
+          loadingPrevious={isFetchingPreviousPage}
+          onLoadPrevious={handleLoadPrevious}
+          firstPage={infiniteData?.pages[0]?.page}
         >
           <SearchResultGrid
             articles={displayedArticles}
