@@ -1,5 +1,6 @@
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { searchArticles } from '../api/content';
+import { getNextSearchPage, getPreviousSearchPage } from './search-page-model';
 import type { SearchDateRange } from '@violet-web/shared';
 
 interface SearchQueryOptions {
@@ -24,15 +25,14 @@ export function useInfiniteSearch(
   query: string,
   pageSize = 30,
   options: SearchQueryOptions = {},
+  initialPage = 0,
 ) {
   return useInfiniteQuery({
-    queryKey: ['search-infinite', query, pageSize, options.dateRange?.from, options.dateRange?.to],
+    queryKey: ['search-infinite', query, pageSize, options.dateRange?.from, options.dateRange?.to, initialPage],
     queryFn: ({ pageParam = 0 }) => searchArticles(query, pageParam, pageSize, options.dateRange),
-    initialPageParam: 0,
-    getNextPageParam: (lastPage, allPages) => {
-      const totalPages = Math.ceil(lastPage.totalCount / pageSize);
-      return allPages.length < totalPages ? allPages.length : undefined;
-    },
+    initialPageParam: initialPage,
+    getNextPageParam: getNextSearchPage,
+    getPreviousPageParam: getPreviousSearchPage,
     enabled: query.length > 0 && options.enabled !== false,
   });
 }
