@@ -1,0 +1,4 @@
+# Optional Pi overlay: change the web image only. All other Compose settings stay intact.
+services:
+  web:
+    image: ${VIOLET_WEB_IMAGE:-ghcr.io/pingpingjinping/violet-web:main-arm64}
