@@ -41,15 +41,14 @@ async function resolveThumbnail(id: number): Promise<string | undefined> {
 
 proxyRouter.get('/image', async (req, res, next) => {
   try {
-    const url = req.query.url as string;
-    const referer = req.query.referer as string | undefined;
+    const { url, referer } = req.query;
 
-    if (!url) {
+    if (typeof url !== 'string' || !url) {
       res.status(400).json({ error: 'url parameter required' });
       return;
     }
 
-    await proxyImage(url, referer, res);
+    await proxyImage(url, typeof referer === 'string' ? referer : undefined, res);
   } catch (err) {
     next(err);
   }
