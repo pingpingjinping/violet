@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { resolveGallery } from './gallery-resolver.js';
+import { resolveGallery, resolveGalleryThumbnail } from './gallery-resolver.js';
 
 test('resolves Hitomi image URLs with current gg.js routing', async () => {
   const originalFetch = globalThis.fetch;
@@ -29,9 +29,10 @@ test('resolves Hitomi image URLs with current gg.js routing', async () => {
   };
 
   try {
-    const [first, shared] = await Promise.all([
+    const [first, shared, thumbnail] = await Promise.all([
       resolveGallery(123),
       resolveGallery(123),
+      resolveGalleryThumbnail(123),
     ]);
 
     assert.equal(counts.get('https://ltn.gold-usergeneratedcontent.net/gg.js'), 1);
@@ -51,11 +52,45 @@ test('resolves Hitomi image URLs with current gg.js routing', async () => {
       `https://btn.gold-usergeneratedcontent.net/webpsmalltn/3/12/${routedHash}.webp`,
       `https://atn.gold-usergeneratedcontent.net/webpsmalltn/6/45/${defaultHash}.webp`,
     ]);
+    assert.equal(thumbnail, first.smallThumbnails[0]);
 
     first.urls.push('caller-only');
     assert.equal(shared.urls.includes('caller-only'), false);
   } finally {
     globalThis.fetch = originalFetch;
+  }
+});
+
+test('cards use an EH database cover or fetch only the first gallery page', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalCookiePath = process.env.EXHENTAI_COOKIE_PATH;
+  const originalCookie = process.env.EXHENTAI_COOKIE;
+  process.env.EXHENTAI_COOKIE_PATH = `/tmp/violet-thumbnail-test-${process.pid}`;
+  delete process.env.EXHENTAI_COOKIE;
+  const calls: string[] = [];
+  const stored = 'https://ehgt.org/t/stored.jpg';
+  const scraped = 'https://ehgt.org/t/scraped.jpg';
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    calls.push(url);
+    if (url.endsWith('/gg.js')) return new Response("var gg = { b: 'cdn/', m: function(g) { var o = 0; return o; } };");
+    if (url.includes('/galleries/')) return new Response(null, { status: 404 });
+    assert.equal(url, 'https://e-hentai.org/g/900022/token/?p=0&inline_set=ts_m');
+    return new Response(`<div id="gdt"><a href="/s/key/900022-1"><img src="${scraped}"></a></div>`);
+  };
+  try {
+    assert.equal(await resolveGalleryThumbnail(900021, { ehash: 'token', files: 1000, thumbnail: stored }), stored);
+    assert.equal(await resolveGalleryThumbnail(900022, { ehash: 'token', files: 1000, thumbnail: null }), scraped);
+    assert.deepEqual(calls.filter((url) => url.includes('/g/')), [
+      'https://e-hentai.org/g/900022/token/?p=0&inline_set=ts_m',
+    ]);
+    assert.equal(calls.some((url) => url.includes('/mpv/')), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalCookiePath === undefined) delete process.env.EXHENTAI_COOKIE_PATH;
+    else process.env.EXHENTAI_COOKIE_PATH = originalCookiePath;
+    if (originalCookie === undefined) delete process.env.EXHENTAI_COOKIE;
+    else process.env.EXHENTAI_COOKIE = originalCookie;
   }
 });
 

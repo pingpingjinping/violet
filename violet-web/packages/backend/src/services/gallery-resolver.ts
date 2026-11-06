@@ -62,6 +62,7 @@ let latestUpdate = 0;
 let latestRefreshAttempt = 0;
 let routingRefresh: Promise<void> | null = null;
 const pendingGalleries = new Map<number, Promise<ImageList>>();
+const pendingHitomiInfo = new Map<number, Promise<GalleryInfo>>();
 
 async function fetchText(url: string, headers?: Record<string, string>): Promise<string> {
   try {
@@ -91,6 +92,19 @@ function getEhMetadata(id: number): EhGalleryMetadata | null {
     files: row?.Files ?? null,
     thumbnail: row?.Thumbnail ?? null,
   };
+}
+
+function getFallbackEhMetadata(
+  id: number,
+  error: unknown,
+  fallbackMetadata?: EhGalleryMetadata | null,
+): EhGalleryMetadata {
+  if (!(error instanceof MediaError)) throw error;
+  let metadata: EhGalleryMetadata | null;
+  try { metadata = fallbackMetadata === undefined ? getEhMetadata(id) : fallbackMetadata; }
+  catch { throw error; }
+  if (!metadata?.ehash.trim()) throw error;
+  return { ...metadata, ehash: metadata.ehash.trim() };
 }
 
 function decodeHtmlAttribute(value: string): string {
@@ -164,6 +178,30 @@ async function fetchEhGalleryPage(url: string): Promise<string> {
   }
 }
 
+function ehGalleryOrigins(hasCookie: boolean): string[] {
+  return hasCookie ? ['https://exhentai.org', 'https://e-hentai.org'] : ['https://e-hentai.org'];
+}
+
+async function resolveEhThumbnail(id: number, metadata: EhGalleryMetadata, initialError: unknown): Promise<string> {
+  const stored = metadata.thumbnail?.trim();
+  if (stored && /^https:\/\/(?:[a-z\d-]+\.)*(?:ehgt|exhentai|e-hentai)\.org\//i.test(stored)) {
+    return stored;
+  }
+
+  let lastError = initialError;
+  for (const origin of ehGalleryOrigins(Boolean(getEhCookie()))) {
+    try {
+      const html = await fetchEhGalleryPage(`${origin}/g/${id}/${metadata.ehash}/?p=0&inline_set=ts_m`);
+      const thumbnail = extractEhThumbnails(html)[0] ?? extractEhImagePages(html, id, origin)[0];
+      if (thumbnail) return thumbnail;
+      throw new MediaError('NO_IMAGES');
+    } catch (error) {
+      lastError = preferMediaError(lastError, error);
+    }
+  }
+  throw lastError;
+}
+
 async function resolveEhGallery(id: number, metadata: EhGalleryMetadata, initialError: unknown): Promise<ImageList> {
   const expected = metadata.files && metadata.files > 0 ? metadata.files : null;
   let lastError: unknown = initialError;
@@ -192,11 +230,7 @@ async function resolveEhGallery(id: number, metadata: EhGalleryMetadata, initial
     }
   }
 
-  const candidates = hasCookie
-    ? ['https://exhentai.org', 'https://e-hentai.org']
-    : ['https://e-hentai.org'];
-
-  for (const origin of candidates) {
+  for (const origin of ehGalleryOrigins(hasCookie)) {
     try {
       const imagePages: string[] = [];
       const thumbnails: string[] = [];
@@ -277,7 +311,16 @@ async function ensureScript(): Promise<void> {
   await routingRefresh;
 }
 
-async function getGalleryInfo(id: number): Promise<GalleryInfo> {
+function getGalleryInfo(id: number): Promise<GalleryInfo> {
+  let pending = pendingHitomiInfo.get(id);
+  if (!pending) {
+    pending = fetchGalleryInfo(id).finally(() => pendingHitomiInfo.delete(id));
+    pendingHitomiInfo.set(id, pending);
+  }
+  return pending;
+}
+
+async function fetchGalleryInfo(id: number): Promise<GalleryInfo> {
   const body = await fetchText(
     `https://ltn.${BASE_DOMAIN}/galleries/${id}.js`,
     getGalleryHeadersSync(),
@@ -320,24 +363,18 @@ function buildImageUrls(files: GalleryFile[], routing: GgRouting, useAvif = fals
   });
 }
 
-function buildThumbnailUrls(files: GalleryFile[], routing: GgRouting, size: 'big' | 'small', useAvif = false): string[] {
-  const firstPath = useAvif
-    ? size === 'big' ? 'avifbigtn' : 'avifsmallsmalltn'
-    : size === 'big' ? 'webpbigtn' : 'webpsmalltn';
-  const ext = useAvif ? 'avif' : 'webp';
+function buildThumbnailUrl(hash: string, routing: GgRouting, size: 'big' | 'small'): string {
+  const firstPath = size === 'big' ? 'webpbigtn' : 'webpsmalltn';
+  const shard = getHashShard(hash);
+  const serverNum = getServerNum(shard, routing);
+  const domain = serverNum === 1 ? 'atn' : 'btn';
+  const secondPath = hash.substring(hash.length - 1);
+  const thirdPath = hash.substring(hash.length - 3, hash.length - 1);
+  return `https://${domain}.${BASE_DOMAIN}/${firstPath}/${secondPath}/${thirdPath}/${hash}.webp`;
+}
 
-  return files.flatMap((file) => {
-    const hash = file.hash;
-    if (!hash) return [];
-
-    const shard = getHashShard(hash);
-    const serverNum = getServerNum(shard, routing);
-    const domain = serverNum === 1 ? 'atn' : 'btn';
-    const secondPath = hash.substring(hash.length - 1);
-    const thirdPath = hash.substring(hash.length - 3, hash.length - 1);
-
-    return [`https://${domain}.${BASE_DOMAIN}/${firstPath}/${secondPath}/${thirdPath}/${hash}.${ext}`];
-  });
+function buildThumbnailUrls(files: GalleryFile[], routing: GgRouting, size: 'big' | 'small'): string[] {
+  return files.flatMap(({ hash }) => hash ? [buildThumbnailUrl(hash, routing, size)] : []);
 }
 
 function getGalleryHeadersSync(): Record<string, string> {
@@ -389,13 +426,23 @@ async function resolveGalleryUncached(
       smallThumbnails: buildThumbnailUrls(files, routingCache, 'small'),
     };
   } catch (error) {
-    // Only source failures should trigger fallback, not arbitrary programming errors.
-    if (!(error instanceof MediaError)) throw error;
-    let metadata: EhGalleryMetadata | null;
-    try { metadata = fallbackMetadata === undefined ? getEhMetadata(id) : fallbackMetadata; }
-    catch { throw error; } // No usable DB means no trustworthy fallback URL.
-    if (!metadata?.ehash.trim()) throw error;
-    return resolveEhGallery(id, { ...metadata, ehash: metadata.ehash.trim() }, error);
+    return resolveEhGallery(id, getFallbackEhMetadata(id, error, fallbackMetadata), error);
+  }
+}
+
+export async function resolveGalleryThumbnail(
+  id: number,
+  fallbackMetadata?: EhGalleryMetadata | null,
+): Promise<string> {
+  try {
+    await ensureScript();
+    if (!routingCache) throw new MediaError('UPSTREAM_ERROR');
+    const { files } = await getGalleryInfo(id);
+    const hash = files?.find((file) => file.hash)?.hash;
+    if (!hash) throw new MediaError('NO_IMAGES');
+    return buildThumbnailUrl(hash, routingCache, 'small');
+  } catch (error) {
+    return resolveEhThumbnail(id, getFallbackEhMetadata(id, error, fallbackMetadata), error);
   }
 }
 
