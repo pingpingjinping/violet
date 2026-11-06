@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { proxyImage } from '../services/image-proxy.js';
-import { resolveGallery } from '../services/gallery-resolver.js';
-import { MediaError, publicMediaError } from '../services/media-error.js';
+import { resolveGallery, resolveGalleryThumbnail } from '../services/gallery-resolver.js';
+import { publicMediaError } from '../services/media-error.js';
 import type { ErrorRequestHandler } from 'express';
 
 export const proxyRouter = Router();
@@ -9,11 +9,11 @@ export const proxyRouter = Router();
 // Cache thumbnails for 30 minutes
 const thumbnailCache = new Map<number, { url: string; timestamp: number }>();
 const THUMBNAIL_CACHE_TTL = 30 * 60 * 1000;
-const thumbnailPending = new Map<number, Promise<string | undefined>>();
+const thumbnailPending = new Map<number, Promise<string>>();
 let thumbnailActive = 0;
 const thumbnailWaiters: Array<() => void> = [];
 
-async function resolveThumbnail(id: number): Promise<string | undefined> {
+async function resolveThumbnail(id: number): Promise<string> {
   const existing = thumbnailPending.get(id);
   if (existing) return existing;
   const task = (async () => {
@@ -23,8 +23,7 @@ async function resolveThumbnail(id: number): Promise<string | undefined> {
       thumbnailActive++;
     }
     try {
-      const gallery = await resolveGallery(id);
-      return gallery.smallThumbnails?.[0] ?? gallery.bigThumbnails?.[0];
+      return await resolveGalleryThumbnail(id);
     } finally {
       const next = thumbnailWaiters.shift();
       if (next) next();
@@ -83,13 +82,7 @@ proxyRouter.get('/thumbnail/:id', async (req, res, next) => {
       return;
     }
 
-    // Resolve gallery and prefer the smaller card thumbnail
     const thumbnailUrl = await resolveThumbnail(id);
-
-    if (!thumbnailUrl) {
-      throw new MediaError('NO_IMAGES');
-    }
-
 
     // Cache the result
     thumbnailCache.set(id, { url: thumbnailUrl, timestamp: Date.now() });

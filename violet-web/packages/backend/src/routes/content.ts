@@ -113,6 +113,11 @@ function buildTagSummary(rows: Iterable<{
     }));
 }
 
+function searchInteger(value: unknown, fallback: number): number {
+  if (value === undefined) return fallback;
+  return typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : NaN;
+}
+
 contentRouter.get('/search', (req, res) => {
   if (!isContentDbReady()) {
     res.status(503).json({ error: 'Database syncing, please wait.' });
@@ -120,8 +125,14 @@ contentRouter.get('/search', (req, res) => {
   }
 
   const query = (req.query.q as string) || '';
-  const page = parseInt(req.query.page as string) || 0;
-  const pageSize = Math.min(parseInt(req.query.pageSize as string) || 30, 100);
+  const page = searchInteger(req.query.page, 0);
+  const requestedPageSize = searchInteger(req.query.pageSize, 30);
+  const pageSize = Math.min(requestedPageSize, 100);
+  if (!Number.isSafeInteger(requestedPageSize) || requestedPageSize < 1 ||
+      !Number.isSafeInteger(page) || !Number.isSafeInteger(page * pageSize)) {
+    res.status(400).json({ error: 'Invalid search pagination.' });
+    return;
+  }
   const from = (req.query.from as string) || undefined;
   const to = (req.query.to as string) || undefined;
   const dateRange = { from, to };
