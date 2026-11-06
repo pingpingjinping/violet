@@ -1,6 +1,10 @@
+import { lookup } from 'node:dns';
+import type { LookupFunction } from 'node:net';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { Response } from 'express';
+import ipaddr from 'ipaddr.js';
+import { Agent } from 'undici';
 import { getEhCookie } from './eh-cookie-store.js';
 import { refreshEhCookieAfterAuthFailure } from './eh-auto-login.js';
 import { MediaError, httpMediaError, ehPageError, checkImageLimitUrl, preferMediaError } from './media-error.js';
@@ -13,6 +17,53 @@ const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 const EH_PAGE_CACHE_TTL = 60 * 60 * 1000;
 const ehPageCache = new Map<string, { url: string; referer: string; timestamp: number }>();
+const IMAGE_DOMAINS = [
+  'hitomi.la', 'gold-usergeneratedcontent.net', 'e-hentai.org',
+  'exhentai.org', 'ehgt.org', 'hath.network',
+];
+const IMAGE_REDIRECTS = [301, 302, 303, 307, 308];
+const MAX_IMAGE_REDIRECTS = 4;
+
+// Resolve for the actual connection so a second lookup cannot change the destination.
+export const publicImageLookup: LookupFunction = (hostname, options, callback) => {
+  lookup(hostname, { ...options, all: true }, (error, addresses) => {
+    if (error) return callback(error, '');
+    const publicAddresses = addresses.filter(({ address }) => {
+      const ip = ipaddr.process(address);
+      return ip.range() === 'unicast' &&
+        (ip.kind() === 'ipv4' || (ip.toByteArray()[0] & 0xe0) === 0x20);
+    });
+    const first = publicAddresses[0];
+    if (!first) {
+      return callback(new Error('Image host has no public address'), '');
+    }
+    if (options.all) return callback(null, publicAddresses);
+    callback(null, first.address, first.family);
+  });
+};
+
+const imageDispatcher = new Agent({ connect: { lookup: publicImageLookup } });
+
+function isDomain(host: string, domain: string): boolean {
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
+function validatedImageUrl(value: string, base?: string): URL {
+  const url = new URL(value, base);
+  const isHath = isDomain(url.hostname, 'hath.network');
+  if (url.protocol !== 'https:' || url.username || url.password
+    || !IMAGE_DOMAINS.some((domain) => isDomain(url.hostname, domain))
+    // Hentai@Home nodes can serve HTTPS images on a custom high port.
+    || (url.port && (!isHath || Number(url.port) < 1024))) {
+    throw new MediaError('UPSTREAM_ERROR');
+  }
+  return url;
+}
+
+function fetchImageHop(url: string, headers: Record<string, string>, signal?: AbortSignal) {
+  const options = { headers, signal, redirect: 'manual' as const, dispatcher: imageDispatcher };
+  return fetch(url, options);
+}
 
 type EhMpvResolver = (
   url: string,
@@ -40,11 +91,11 @@ function decodeHtmlAttribute(value: string): string {
   return value.replaceAll('&amp;', '&').replaceAll('&quot;', '"').replaceAll('&#39;', "'");
 }
 
-function extractEhImageUrl(html: string): string {
+function extractEhImageUrl(html: string, pageUrl: string): string {
   const tag = html.match(/<img\b[^>]*\bid=["']img["'][^>]*>/i)?.[0];
   const source = tag?.match(/\bsrc=["']([^"']+)["']/i)?.[1];
   if (!source) throw ehPageError(html);
-  const url = new URL(decodeHtmlAttribute(source), 'https://exhentai.org/').toString();
+  const url = validatedImageUrl(decodeHtmlAttribute(source), pageUrl).href;
   checkImageLimitUrl(url);
   return url;
 }
@@ -80,11 +131,7 @@ async function fetchEhImagePage(
   signal?: AbortSignal,
 ): Promise<string> {
   for (let attempt = 0; attempt < 2; attempt++) {
-    const response = await fetch(url, {
-      headers: imageHeaders(url, url),
-      redirect: 'manual',
-      signal,
-    });
+    const response = await fetchImageHop(url, imageHeaders(url, url), signal);
     let error: MediaError;
     if (!response.ok) {
       await response.body?.cancel();
@@ -108,15 +155,16 @@ export async function resolveImageSource(
   mpvResolver: EhMpvResolver = resolveEhMpvImage,
 ): Promise<ResolvedImageSource> {
   const rewritten = url.replace(
-    /^(https?:\/\/)([a-z]+)\.hitomi\.la\//,
-    (_, proto, sub) => `${proto}${sub}.gold-usergeneratedcontent.net/`,
+    /^https?:\/\/([a-z]+)\.hitomi\.la\//i,
+    (_, sub) => `https://${sub}.gold-usergeneratedcontent.net/`,
   );
-  const parsed = new URL(rewritten);
+  const parsed = validatedImageUrl(rewritten);
 
   if (isEhGalleryHost(parsed.hostname) && parsed.pathname.startsWith('/s/')) {
     const cached = ehPageCache.get(rewritten);
     if (cached && Date.now() - cached.timestamp < EH_PAGE_CACHE_TTL) {
-      return { url: cached.url, headers: imageHeaders(cached.url, cached.referer) };
+      const imageUrl = validatedImageUrl(cached.url).href;
+      return { url: imageUrl, headers: imageHeaders(imageUrl, cached.referer) };
     }
 
     let mpvError: unknown;
@@ -126,10 +174,11 @@ export async function resolveImageSource(
       const mpvSource = parsed.hostname === 'exhentai.org'
         ? await mpvResolver(rewritten, signal) : null;
       if (mpvSource) {
-        cacheEhImage(rewritten, mpvSource.url, mpvSource.referer);
+        const imageUrl = validatedImageUrl(mpvSource.url).href;
+        cacheEhImage(rewritten, imageUrl, mpvSource.referer);
         return {
-          url: mpvSource.url,
-          headers: imageHeaders(mpvSource.url, mpvSource.referer),
+          url: imageUrl,
+          headers: imageHeaders(imageUrl, mpvSource.referer),
         };
       }
     } catch (error) {
@@ -139,7 +188,7 @@ export async function resolveImageSource(
 
     try {
       const html = await fetchEhImagePage(rewritten, signal);
-      const imageUrl = extractEhImageUrl(html);
+      const imageUrl = extractEhImageUrl(html, rewritten);
       cacheEhImage(rewritten, imageUrl, rewritten);
       return { url: imageUrl, headers: imageHeaders(imageUrl, rewritten) };
     } catch (error) {
@@ -147,7 +196,27 @@ export async function resolveImageSource(
     }
   }
 
-  return { url: rewritten, headers: imageHeaders(rewritten, referer) };
+  return { url: parsed.href, headers: imageHeaders(parsed.href, referer) };
+}
+
+async function fetchResolvedImage(source: ResolvedImageSource, signal: AbortSignal) {
+  let url = validatedImageUrl(source.url);
+  const headers = { ...source.headers };
+  for (let redirects = 0; ; redirects++) {
+    checkImageLimitUrl(url.href);
+    const response = await fetchImageHop(url.href, headers, signal);
+    if (!IMAGE_REDIRECTS.includes(response.status)) return response;
+
+    const location = response.headers.get('location');
+    await response.body?.cancel();
+    if (!location || redirects >= MAX_IMAGE_REDIRECTS) {
+      throw new MediaError('UPSTREAM_ERROR');
+    }
+
+    const next = validatedImageUrl(location, url.href);
+    if (next.origin !== url.origin) delete headers.Cookie;
+    url = next;
+  }
 }
 
 export async function proxyImage(
@@ -161,11 +230,7 @@ export async function proxyImage(
   try {
     const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]);
     const source = await resolveImageSource(url, referer, signal);
-    checkImageLimitUrl(source.url);
-    const upstream = await fetch(source.url, {
-      headers: source.headers,
-      signal,
-    });
+    const upstream = await fetchResolvedImage(source, signal);
 
     if (!upstream.ok) {
       await upstream.body?.cancel();

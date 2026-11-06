@@ -199,6 +199,7 @@ export function createEhMpvService(
 
     const response = await deps.fetchFn(EH_API_URL, {
       method: 'POST',
+      redirect: 'manual',
       headers: {
         'User-Agent': USER_AGENT,
         'Content-Type': 'application/json',
