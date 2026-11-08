@@ -255,7 +255,10 @@ func TestKeywordIndexSharesRowStorage(t *testing.T) {
 		{ArticleID: "work-2", Keyword: "seed", Score: 2, Rank: 1},
 	}
 	index := newKeywordIndex(rows)
-	selected := index.works["work-1"]["seed"]
+	selected, ok := index.works["work-1"].get("seed")
+	if !ok {
+		t.Fatal("missing work-1/seed")
+	}
 	if selected != &rows[1] {
 		t.Fatalf("selected row = %p, want %p", selected, &rows[1])
 	}
