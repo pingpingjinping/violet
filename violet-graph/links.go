@@ -138,13 +138,15 @@ func intersectKeywordWorks(index keywordIndex, keywords []string) map[string]str
 		}
 		if intersection == nil {
 			intersection = make(map[string]struct{}, len(rowsByWork))
-			for articleID := range rowsByWork {
-				intersection[articleID] = struct{}{}
+			for _, row := range rowsByWork {
+				intersection[row.ArticleID] = struct{}{}
 			}
 			continue
 		}
+		// The forward work map is O(1) for membership; avoid
+		// reconstructing a second reverse map per keyword.
 		for articleID := range intersection {
-			if _, exists := rowsByWork[articleID]; !exists {
+			if _, exists := index.works[articleID][keyword]; !exists {
 				delete(intersection, articleID)
 			}
 		}
