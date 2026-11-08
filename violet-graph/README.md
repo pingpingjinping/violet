@@ -212,3 +212,29 @@ go test ./...
 ```
 
 테스트는 키워드 추출, 유사 키워드 계산, 그래프 생성, `/api/graph`, `/api/links`, `/api/works` 핸들러 동작을 확인합니다.
+
+## 저메모리 Docker 운영
+
+`serve`는 CSV를 로드한 다음 두 검색 인덱스를 구성합니다. 인덱스는 원본
+키워드 행을 공유하고, CSV의 반복 문자열은 하나의 저장소를 재사용하므로
+각 검색 인덱스에 키워드 행 전체를 복사하지 않습니다.
+
+Docker Compose의 `graph` 서비스는 기본적으로 800MB 컨테이너 메모리
+제한 안에서 `GOMEMLIMIT=640MiB`, `GOGC=75`를 사용합니다.
+Go 메모리 제한은 소프트 제한이므로 OOM이 절대 발생하지 않는다는 의미는
+아닙니다. 서비스가 중지되거나 시작 속도가 지나치게 느려지는 경우,
+실측값에 맞춰 값을 조정하세요.
+
+```sh
+# 기본 Compose 실행에서 제외된 graph만 활성화
+docker compose --profile extra up -d --build graph
+
+# 시작 상태 및 실제 메모리/스왑 확인
+docker compose --profile extra logs --tail=30 graph
+docker stats --no-stream violet-graph-1
+```
+
+필요하면 `.env`에서 `VIOLET_GRAPH_GOMEMLIMIT=640MiB` 및
+`VIOLET_GRAPH_GOGC=75`를 변경할 수 있습니다.
+최적화 전후 RSS와 요청 응답 속도를 비교한 후 RAM 제한을 더 낮추는 것을
+권장합니다.
