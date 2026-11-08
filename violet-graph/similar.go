@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/csv"
 	"flag"
 	"fmt"
@@ -107,8 +108,40 @@ func readKeywordCSV(inputPath string) ([]keywordRow, error) {
 	}
 	defer file.Close()
 
+	// Count physical lines before parsing so the large keywordRow backing
+	// array can be allocated only once. Extra lines inside quoted CSV fields
+	// may overestimate capacity but cannot change parsed results.
+	buf := make([]byte, 1<<20)
+	lineCount := 0
+	lastWasNewline := false
+	hasData := false
+	for {
+		n, readErr := file.Read(buf)
+		if n > 0 {
+			hasData = true
+			lastWasNewline = buf[n-1] == '\n'
+			lineCount += bytes.Count(buf[:n], []byte{'\n'})
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return nil, readErr
+		}
+	}
+	if hasData && !lastWasNewline {
+		lineCount++
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+	rowCapacity := lineCount - 1 // Exclude CSV header.
+	if rowCapacity < 0 {
+		rowCapacity = 0
+	}
 	reader := csv.NewReader(bufio.NewReaderSize(file, 1<<20))
 	reader.FieldsPerRecord = -1
+	reader.ReuseRecord = true
 	header, err := reader.Read()
 	if err != nil {
 		return nil, err
@@ -130,7 +163,7 @@ func readKeywordCSV(inputPath string) ([]keywordRow, error) {
 		return shared
 	}
 
-	rows := make([]keywordRow, 0, 1024)
+	rows := make([]keywordRow, 0, rowCapacity)
 	for {
 		record, err := reader.Read()
 		if err == io.EOF {
