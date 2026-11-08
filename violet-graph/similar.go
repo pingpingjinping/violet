@@ -186,16 +186,27 @@ func readKeywordCSV(inputPath string) ([]keywordRow, error) {
 		if err != nil {
 			return nil, err
 		}
+		// A row's compact counters must never silently wrap on conversion.
+		// Real dataset values are far below this 32-bit limit.
+		names := [...]string{"rank", "tf", "df", "total_pages", "dialogue_count", "char_count"}
+		var counts [6]int32
+		for i, name := range names {
+			value := parseCSVInt(record, index, name)
+			if int64(value) != int64(int32(value)) {
+				return nil, fmt.Errorf("CSV %s value %d exceeds 32-bit index range", name, value)
+			}
+			counts[i] = int32(value)
+		}
 		row := keywordRow{
 			ArticleID:      intern(getCSVField(record, index, "article_id")),
 			Keyword:        intern(getCSVField(record, index, "keyword")),
-			Rank:           parseCSVInt(record, index, "rank"),
-			TF:             parseCSVInt(record, index, "tf"),
-			DF:             parseCSVInt(record, index, "df"),
 			Score:          parseCSVFloat(record, index, "score"),
-			TotalPages:     parseCSVInt(record, index, "total_pages"),
-			DialogueCount:  parseCSVInt(record, index, "dialogue_count"),
-			CharacterCount: parseCSVInt(record, index, "char_count"),
+			Rank:           counts[0],
+			TF:             counts[1],
+			DF:             counts[2],
+			TotalPages:     counts[3],
+			DialogueCount:  counts[4],
+			CharacterCount: counts[5],
 		}
 		if row.ArticleID == "" || row.Keyword == "" {
 			continue
