@@ -411,7 +411,7 @@ func topAggregateWorkKeywordsFromIndex(index keywordIndex, workRows map[string]k
 	return keywords
 }
 
-func maxWorkKeywordCooccur(index keywordIndex, workRows map[string]*keywordRow, keyword string) int {
+func maxWorkKeywordCooccur[T any](index keywordIndex, workRows map[string]T, keyword string) int {
 	maxCooccur := 0
 	for peerKeyword := range workRows {
 		if peerKeyword == keyword {
