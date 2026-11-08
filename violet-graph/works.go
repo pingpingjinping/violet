@@ -74,7 +74,8 @@ func findRelatedWorksFromIndex(index keywordIndex, opts relatedWorksOptions) rel
 
 	accumulators := make(map[string]*relatedWorkAccumulator)
 	for keyword, queryWeight := range queryWeights {
-		for articleID, row := range index.keywordWorks[keyword] {
+		for _, row := range index.keywordWorks[keyword] {
+			articleID := row.ArticleID
 			acc := accumulators[articleID]
 			if acc == nil {
 				acc = &relatedWorkAccumulator{articleID: articleID}
@@ -435,8 +436,8 @@ func keywordPairCooccur(index keywordIndex, left string, right string) int {
 		leftWorks, rightWorks = rightWorks, leftWorks
 	}
 	cooccur := 0
-	for articleID := range leftWorks {
-		if _, ok := rightWorks[articleID]; ok {
+	for _, row := range leftWorks {
+		if _, ok := index.works[row.ArticleID][right]; ok {
 			cooccur++
 		}
 	}
