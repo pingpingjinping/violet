@@ -69,7 +69,7 @@ func findRelatedLinksFromIndex(index keywordIndex, opts relatedLinksOptions) rel
 				accumulators[keyword] = acc
 			}
 			acc.cooccur++
-			acc.rawScore += keywordWeight(row)
+			acc.rawScore += keywordWeight(*row)
 		}
 	}
 
