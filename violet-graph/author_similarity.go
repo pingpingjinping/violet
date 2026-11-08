@@ -413,7 +413,7 @@ func buildAuthorProfilesFromWorkScores(index keywordIndex, authorWorks []authorW
 			}
 			term.rawScore += row.Score
 			term.workHits++
-			term.tf += row.TF
+			term.tf += int(row.TF)
 		}
 	}
 
