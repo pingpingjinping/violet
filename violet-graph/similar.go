@@ -43,7 +43,7 @@ type similarAccumulator struct {
 
 type keywordIndex struct {
 	works        map[string]map[string]*keywordRow
-	keywordWorks map[string]map[string]*keywordRow
+	keywordWorks map[string][]*keywordRow
 	actualDF     map[string]int
 }
 
@@ -180,17 +180,21 @@ func newKeywordIndex(rows []keywordRow) keywordIndex {
 		}
 	}
 
+	// An inverted list is substantially smaller than a map for every
+	// (keyword, work) pair. Keep O(1) work/keyword lookups in works instead.
 	actualDF := make(map[string]int)
-	keywordWorks := make(map[string]map[string]*keywordRow)
+	for _, workRows := range works {
+		for keyword := range workRows {
+			actualDF[keyword]++
+		}
+	}
+	keywordWorks := make(map[string][]*keywordRow, len(actualDF))
+	for keyword, count := range actualDF {
+		keywordWorks[keyword] = make([]*keywordRow, 0, count)
+	}
 	for _, workRows := range works {
 		for keyword, row := range workRows {
-			actualDF[keyword]++
-			rowsByWork := keywordWorks[keyword]
-			if rowsByWork == nil {
-				rowsByWork = make(map[string]*keywordRow)
-				keywordWorks[keyword] = rowsByWork
-			}
-			rowsByWork[row.ArticleID] = row
+			keywordWorks[keyword] = append(keywordWorks[keyword], row)
 		}
 	}
 	return keywordIndex{
@@ -227,7 +231,8 @@ func findSimilarKeywordsFromIndex(index keywordIndex, opts similarOptions) []sim
 
 	queryWorks := make(map[string]float64)
 	for _, term := range queryTerms {
-		for articleID, row := range index.keywordWorks[term] {
+		for _, row := range index.keywordWorks[term] {
+			articleID := row.ArticleID
 			weight := keywordWeight(*row)
 			if old, exists := queryWorks[articleID]; !exists || weight > old {
 				queryWorks[articleID] = weight
