@@ -42,8 +42,8 @@ type similarAccumulator struct {
 }
 
 type keywordIndex struct {
-	works        map[string]map[string]keywordRow
-	keywordWorks map[string]map[string]keywordRow
+	works        map[string]map[string]*keywordRow
+	keywordWorks map[string]map[string]*keywordRow
 	actualDF     map[string]int
 }
 
@@ -118,6 +118,18 @@ func readKeywordCSV(inputPath string) ([]keywordRow, error) {
 		index[strings.TrimPrefix(name, "\ufeff")] = i
 	}
 
+	// Intern repeated work IDs and keywords, and detach retained strings from
+	// CSV record buffers (whose numeric fields otherwise stay in memory too).
+	interned := make(map[string]string)
+	intern := func(value string) string {
+		if shared, ok := interned[value]; ok {
+			return shared
+		}
+		shared := strings.Clone(value)
+		interned[shared] = shared
+		return shared
+	}
+
 	rows := make([]keywordRow, 0, 1024)
 	for {
 		record, err := reader.Read()
@@ -128,8 +140,8 @@ func readKeywordCSV(inputPath string) ([]keywordRow, error) {
 			return nil, err
 		}
 		row := keywordRow{
-			ArticleID:      getCSVField(record, index, "article_id"),
-			Keyword:        getCSVField(record, index, "keyword"),
+			ArticleID:      intern(getCSVField(record, index, "article_id")),
+			Keyword:        intern(getCSVField(record, index, "keyword")),
 			Rank:           parseCSVInt(record, index, "rank"),
 			TF:             parseCSVInt(record, index, "tf"),
 			DF:             parseCSVInt(record, index, "df"),
@@ -151,30 +163,31 @@ func findSimilarKeywords(rows []keywordRow, opts similarOptions) []similarResult
 }
 
 func newKeywordIndex(rows []keywordRow) keywordIndex {
-	works := make(map[string]map[string]keywordRow)
-	for _, row := range rows {
+	works := make(map[string]map[string]*keywordRow)
+	for i := range rows {
+		row := &rows[i]
 		if row.Keyword == "" || row.ArticleID == "" {
 			continue
 		}
 		workRows := works[row.ArticleID]
 		if workRows == nil {
-			workRows = make(map[string]keywordRow)
+			workRows = make(map[string]*keywordRow)
 			works[row.ArticleID] = workRows
 		}
 		old, exists := workRows[row.Keyword]
-		if !exists || keywordWeight(row) > keywordWeight(old) {
+		if !exists || keywordWeight(*row) > keywordWeight(*old) {
 			workRows[row.Keyword] = row
 		}
 	}
 
 	actualDF := make(map[string]int)
-	keywordWorks := make(map[string]map[string]keywordRow)
+	keywordWorks := make(map[string]map[string]*keywordRow)
 	for _, workRows := range works {
 		for keyword, row := range workRows {
 			actualDF[keyword]++
 			rowsByWork := keywordWorks[keyword]
 			if rowsByWork == nil {
-				rowsByWork = make(map[string]keywordRow)
+				rowsByWork = make(map[string]*keywordRow)
 				keywordWorks[keyword] = rowsByWork
 			}
 			rowsByWork[row.ArticleID] = row
@@ -215,7 +228,7 @@ func findSimilarKeywordsFromIndex(index keywordIndex, opts similarOptions) []sim
 	queryWorks := make(map[string]float64)
 	for _, term := range queryTerms {
 		for articleID, row := range index.keywordWorks[term] {
-			weight := keywordWeight(row)
+			weight := keywordWeight(*row)
 			if old, exists := queryWorks[articleID]; !exists || weight > old {
 				queryWorks[articleID] = weight
 			}
@@ -236,7 +249,7 @@ func findSimilarKeywordsFromIndex(index keywordIndex, opts similarOptions) []sim
 				accumulators[keyword] = acc
 			}
 			acc.cooccur++
-			acc.rawScore += queryWeight * keywordWeight(row)
+			acc.rawScore += queryWeight * keywordWeight(*row)
 		}
 	}
 
@@ -344,7 +357,7 @@ func resolveQueryTerms(query string, expand string, actualDF map[string]int) []s
 	return result
 }
 
-func bestQueryWeight(workRows map[string]keywordRow, queryTerms []string) (float64, bool) {
+func bestQueryWeight(workRows map[string]*keywordRow, queryTerms []string) (float64, bool) {
 	best := 0.0
 	found := false
 	for _, term := range queryTerms {
@@ -352,7 +365,7 @@ func bestQueryWeight(workRows map[string]keywordRow, queryTerms []string) (float
 		if !ok {
 			continue
 		}
-		weight := keywordWeight(row)
+		weight := keywordWeight(*row)
 		if !found || weight > best {
 			best = weight
 			found = true
