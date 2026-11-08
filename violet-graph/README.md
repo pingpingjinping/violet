@@ -226,13 +226,23 @@ Go 메모리 제한은 소프트 제한이므로 OOM이 절대 발생하지 않�
 실측값에 맞춰 값을 조정하세요.
 
 ```sh
-# 기본 Compose 실행에서 제외된 graph만 활성화
-docker compose --profile extra up -d --build graph
+# main 브랜치에서 그래프 이미지가 GitHub Actions로 빌드·게시된 뒤 실행
+# Pi에서는 컴파일하지 않고 이미지를 다운로드해서 그래프 컨테이너만 교체
+git pull --ff-only
+docker compose --profile extra pull graph
+docker compose --profile extra up -d --no-deps --no-build graph
 
 # 시작 상태 및 실제 메모리/스왑 확인
 docker compose --profile extra logs --tail=30 graph
 docker stats --no-stream violet-graph-1
 ```
+
+그래프 Docker 이미지는 `ghcr.io/pingpingjinping/violet-graph:main-arm64`에
+게시됩니다. 특정 버전으로 고정하려면 `.env`에
+`VIOLET_GRAPH_IMAGE=ghcr.io/pingpingjinping/violet-graph:sha-<commit>`을
+설정할 수 있습니다. PR 빌드는 검증만 수행하고, main으로 머지된 코드만
+GHCR에 게시합니다. 이미지가 공개로 설정되어 있어야 파이에서 인증 없이
+`docker pull` 할 수 있습니다.
 
 필요하면 `.env`에서 `VIOLET_GRAPH_GOMEMLIMIT=640MiB` 및
 `VIOLET_GRAPH_GOGC=75`를 변경할 수 있습니다.

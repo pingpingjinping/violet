@@ -152,11 +152,12 @@ func TestKeywordIndexStoresWorksByKeyword(t *testing.T) {
 	if len(index.keywordWorks["seed"]) != 2 {
 		t.Fatalf("seed work count = %d, want 2", len(index.keywordWorks["seed"]))
 	}
-	if _, ok := index.keywordWorks["seed"]["1"]; !ok {
-		t.Fatalf("seed should include article 1")
+	seen := make(map[string]bool)
+	for _, row := range index.keywordWorks["seed"] {
+		seen[row.ArticleID] = true
 	}
-	if _, ok := index.keywordWorks["seed"]["2"]; !ok {
-		t.Fatalf("seed should include article 2")
+	if !seen["1"] || !seen["2"] {
+		t.Fatalf("seed should include articles 1 and 2: %v", seen)
 	}
 	if len(index.keywordWorks["peer"]) != 1 {
 		t.Fatalf("peer work count = %d, want 1", len(index.keywordWorks["peer"]))
@@ -258,10 +259,14 @@ func TestKeywordIndexSharesRowStorage(t *testing.T) {
 	if selected != &rows[1] {
 		t.Fatalf("selected row = %p, want %p", selected, &rows[1])
 	}
-	if other := index.keywordWorks["seed"]["work-1"]; other != selected {
+	postings := make(map[string]*keywordRow)
+	for _, row := range index.keywordWorks["seed"] {
+		postings[row.ArticleID] = row
+	}
+	if other := postings["work-1"]; other != selected {
 		t.Fatalf("indexes hold different row pointers: %p and %p", selected, other)
 	}
-	if other := index.keywordWorks["seed"]["work-2"]; other != &rows[2] {
+	if other := postings["work-2"]; other != &rows[2] {
 		t.Fatalf("work-2 row = %p, want %p", other, &rows[2])
 	}
 }

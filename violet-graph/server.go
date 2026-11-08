@@ -28,14 +28,16 @@ type workSetRequest struct {
 
 func runServe(args []string) error {
 	opts := parseServeFlags(args)
+	fmt.Printf("[graph] reading CSV input=%s\n", opts.inputPath)
 	rows, err := readKeywordCSV(opts.inputPath)
 	if err != nil {
 		return err
 	}
+	fmt.Printf("[graph] CSV loaded keyword_rows=%d; building index\n", len(rows))
+	server := newKeywordGraphServer(rows)
 	addr := fmt.Sprintf("%s:%d", opts.host, opts.port)
-	fmt.Printf("loaded keyword_rows=%d input=%s\n", len(rows), opts.inputPath)
-	fmt.Printf("Keyword Graph: http://%s\n", addr)
-	return http.ListenAndServe(addr, newKeywordGraphServer(rows))
+	fmt.Printf("[graph] index ready, listening on http://%s\n", addr)
+	return http.ListenAndServe(addr, server)
 }
 
 func parseServeFlags(args []string) serveOptions {
