@@ -1,0 +1,22 @@
+name: Violet Graph Go Tests
+
+on:
+  pull_request:
+    paths:
+      - 'violet-graph/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/violet-graph-test.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: violet-graph/go.mod
+          cache-dependency-path: violet-graph/go.mod
+      - name: Run Go tests
+        working-directory: violet-graph
+        run: go test ./...
