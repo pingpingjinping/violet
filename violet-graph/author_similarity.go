@@ -354,7 +354,7 @@ func buildAuthorProfiles(articleRows map[string][]keywordRow, authorWorks []auth
 			}
 			term.rawScore += keywordWeight(row) * weight
 			term.workHits++
-			term.tf += row.TF
+			term.tf += int(row.TF)
 		}
 	}
 
