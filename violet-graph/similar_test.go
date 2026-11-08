@@ -244,3 +244,24 @@ func TestSimilarCSVCanShowQueryTerms(t *testing.T) {
 		t.Fatalf("unexpected output:\n%s", got)
 	}
 }
+
+func TestKeywordIndexSharesRowStorage(t *testing.T) {
+	// Duplicate work/keyword pairs must still choose the strongest row, while
+	// the work-first and keyword-first indexes point to the same CSV row.
+	rows := []keywordRow{
+		{ArticleID: "work-1", Keyword: "seed", Score: 3, Rank: 2},
+		{ArticleID: "work-1", Keyword: "seed", Score: 5, Rank: 1},
+		{ArticleID: "work-2", Keyword: "seed", Score: 2, Rank: 1},
+	}
+	index := newKeywordIndex(rows)
+	selected := index.works["work-1"]["seed"]
+	if selected != &rows[1] {
+		t.Fatalf("selected row = %p, want %p", selected, &rows[1])
+	}
+	if other := index.keywordWorks["seed"]["work-1"]; other != selected {
+		t.Fatalf("indexes hold different row pointers: %p and %p", selected, other)
+	}
+	if other := index.keywordWorks["seed"]["work-2"]; other != &rows[2] {
+		t.Fatalf("work-2 row = %p, want %p", other, &rows[2])
+	}
+}
