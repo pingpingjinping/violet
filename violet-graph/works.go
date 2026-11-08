@@ -80,8 +80,8 @@ func findRelatedWorksFromIndex(index keywordIndex, opts relatedWorksOptions) rel
 				acc = &relatedWorkAccumulator{articleID: articleID}
 				accumulators[articleID] = acc
 			}
-			acc.rawScore += queryWeight * keywordWeight(row)
-			acc.matchedKeywords = append(acc.matchedKeywords, relatedWorkKeywordFromRow(row))
+			acc.rawScore += queryWeight * keywordWeight(*row)
+			acc.matchedKeywords = append(acc.matchedKeywords, relatedWorkKeywordFromRow(*row))
 		}
 	}
 
@@ -175,7 +175,7 @@ func findWorkSetFromIndex(index keywordIndex, articleIDs []string) (relatedWork,
 		for keyword, row := range workRows {
 			merged, exists := mergedRows[keyword]
 			if !exists {
-				merged = row
+				merged = *row
 				merged.ArticleID = ""
 				merged.Rank = 0
 				merged.Score = 0
@@ -327,10 +327,10 @@ func relatedWorkKeywordFromRow(row keywordRow) relatedWorkKeyword {
 	}
 }
 
-func topRelatedWorkKeywords(workRows map[string]keywordRow, limit int) []relatedWorkKeyword {
+func topRelatedWorkKeywords(workRows map[string]*keywordRow, limit int) []relatedWorkKeyword {
 	keywords := make([]relatedWorkKeyword, 0, len(workRows))
 	for _, row := range workRows {
-		keywords = append(keywords, relatedWorkKeywordFromRow(row))
+		keywords = append(keywords, relatedWorkKeywordFromRow(*row))
 	}
 	sortRelatedWorkKeywords(keywords)
 	if limit > 0 && len(keywords) > limit {
@@ -346,7 +346,7 @@ type relatedWorkKeywordOptions struct {
 	minKeywordDF   int
 }
 
-func topRelatedWorkKeywordsFromIndex(index keywordIndex, workRows map[string]keywordRow, opts relatedWorkKeywordOptions) []relatedWorkKeyword {
+func topRelatedWorkKeywordsFromIndex(index keywordIndex, workRows map[string]*keywordRow, opts relatedWorkKeywordOptions) []relatedWorkKeyword {
 	if opts.topN < 1 {
 		opts.topN = 100
 	}
@@ -363,7 +363,7 @@ func topRelatedWorkKeywordsFromIndex(index keywordIndex, workRows map[string]key
 		if keywordDF < opts.minKeywordDF {
 			continue
 		}
-		item := relatedWorkKeywordFromRow(row)
+		item := relatedWorkKeywordFromRow(*row)
 		item.DF = keywordDF
 		item.Cooccur = maxWorkKeywordCooccur(index, workRows, keyword)
 		keywords = append(keywords, item)
@@ -411,7 +411,7 @@ func topAggregateWorkKeywordsFromIndex(index keywordIndex, workRows map[string]k
 	return keywords
 }
 
-func maxWorkKeywordCooccur(index keywordIndex, workRows map[string]keywordRow, keyword string) int {
+func maxWorkKeywordCooccur[T any](index keywordIndex, workRows map[string]T, keyword string) int {
 	maxCooccur := 0
 	for peerKeyword := range workRows {
 		if peerKeyword == keyword {
@@ -517,7 +517,7 @@ func sortRelatedWorkKeywords(keywords []relatedWorkKeyword) {
 	})
 }
 
-func relatedWorkStats(workRows map[string]keywordRow) (int, int, int) {
+func relatedWorkStats(workRows map[string]*keywordRow) (int, int, int) {
 	for _, row := range workRows {
 		return row.TotalPages, row.DialogueCount, row.CharacterCount
 	}
