@@ -185,10 +185,10 @@ func findWorkSetFromIndex(index keywordIndex, articleIDs []string) (relatedWork,
 			}
 			merged.Score += row.Score
 			merged.TF += row.TF
-			merged.DF = index.actualDF[keyword]
-			merged.TotalPages = totalPages
-			merged.DialogueCount = dialogueCount
-			merged.CharacterCount = characterCount
+			merged.DF = int32(index.actualDF[keyword])
+			merged.TotalPages = int32(totalPages)
+			merged.DialogueCount = int32(dialogueCount)
+			merged.CharacterCount = int32(characterCount)
 			mergedRows[keyword] = merged
 		}
 	}
@@ -323,9 +323,9 @@ func relatedWorkKeywordFromRow(row keywordRow) relatedWorkKeyword {
 	return relatedWorkKeyword{
 		Keyword: row.Keyword,
 		Score:   row.Score,
-		Rank:    row.Rank,
-		TF:      row.TF,
-		DF:      row.DF,
+		Rank:    int(row.Rank),
+		TF:      int(row.TF),
+		DF:      int(row.DF),
 	}
 }
 
@@ -535,7 +535,7 @@ func sortRelatedWorkKeywords(keywords []relatedWorkKeyword) {
 
 func relatedWorkStats(workRows workKeywordRows) (int, int, int) {
 	for _, row := range workRows {
-		return row.TotalPages, row.DialogueCount, row.CharacterCount
+		return int(row.TotalPages), int(row.DialogueCount), int(row.CharacterCount)
 	}
 	return 0, 0, 0
 }
