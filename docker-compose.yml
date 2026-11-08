@@ -77,9 +77,8 @@ services:
 
   graph:
     profiles: ["extra"]
-    build:
-      context: ./violet-graph
-    image: violet/graph:local
+    # Built on GitHub Actions and published to GHCR (linux/arm64).
+    image: ${VIOLET_GRAPH_IMAGE:-ghcr.io/pingpingjinping/violet-graph:main-arm64}
     mem_limit: 800m
     memswap_limit: 2500m
     environment:
