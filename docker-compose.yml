@@ -97,7 +97,8 @@ services:
       - "8787:8787"
     volumes:
       - ${VIOLET_GRAPH_DATA:-/home/pi/violet-data/graph.csv}:/data/graph.csv:ro
-    restart: unless-stopped
+    # Manual-only: do not restart on Docker daemon/host startup.
+    restart: "no"
 
   web:
     build:
