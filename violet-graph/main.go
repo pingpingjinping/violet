@@ -53,16 +53,18 @@ type workDocument struct {
 	TermCounts     map[string]int
 }
 
+// Pack the six small per-row counters into 32-bit fields. 4M CSV rows
+// require ~256 MiB here instead of ~384 MiB on 64-bit Go.
 type keywordRow struct {
 	ArticleID      string  `json:"article_id"`
-	Rank           int     `json:"rank"`
 	Keyword        string  `json:"keyword"`
 	Score          float64 `json:"score"`
-	TF             int     `json:"tf"`
-	DF             int     `json:"df"`
-	TotalPages     int     `json:"total_pages"`
-	DialogueCount  int     `json:"dialogue_count"`
-	CharacterCount int     `json:"char_count"`
+	Rank           int32   `json:"rank"`
+	TF             int32   `json:"tf"`
+	DF             int32   `json:"df"`
+	TotalPages     int32   `json:"total_pages"`
+	DialogueCount  int32   `json:"dialogue_count"`
+	CharacterCount int32   `json:"char_count"`
 }
 
 type options struct {
@@ -407,11 +409,11 @@ func rankWorkKeywords(docs []workDocument, topK int, minDF int, minTF int, maxDF
 				ArticleID:      doc.ArticleID,
 				Keyword:        term,
 				Score:          score,
-				TF:             tf,
-				DF:             termDF,
-				TotalPages:     doc.TotalPages,
-				DialogueCount:  doc.DialogueCount,
-				CharacterCount: doc.CharacterCount,
+				TF:             int32(tf),
+				DF:             int32(termDF),
+				TotalPages:     int32(doc.TotalPages),
+				DialogueCount:  int32(doc.DialogueCount),
+				CharacterCount: int32(doc.CharacterCount),
 			})
 		}
 		sort.Slice(candidates, func(i, j int) bool {
@@ -430,7 +432,7 @@ func rankWorkKeywords(docs []workDocument, topK int, minDF int, minTF int, maxDF
 			candidates = candidates[:topK]
 		}
 		for i := range candidates {
-			candidates[i].Rank = i + 1
+			candidates[i].Rank = int32(i + 1)
 			rows = append(rows, candidates[i])
 		}
 	}
@@ -455,14 +457,14 @@ func writeKeywordCSV(rows []keywordRow, outputPath string) error {
 	for _, row := range rows {
 		record := []string{
 			row.ArticleID,
-			strconv.Itoa(row.Rank),
+			strconv.FormatInt(int64(row.Rank), 10),
 			row.Keyword,
 			strconv.FormatFloat(row.Score, 'f', 6, 64),
-			strconv.Itoa(row.TF),
-			strconv.Itoa(row.DF),
-			strconv.Itoa(row.TotalPages),
-			strconv.Itoa(row.DialogueCount),
-			strconv.Itoa(row.CharacterCount),
+			strconv.FormatInt(int64(row.TF), 10),
+			strconv.FormatInt(int64(row.DF), 10),
+			strconv.FormatInt(int64(row.TotalPages), 10),
+			strconv.FormatInt(int64(row.DialogueCount), 10),
+			strconv.FormatInt(int64(row.CharacterCount), 10),
 		}
 		if err := writer.Write(record); err != nil {
 			return err

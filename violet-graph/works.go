@@ -173,7 +173,8 @@ func findWorkSetFromIndex(index keywordIndex, articleIDs []string) (relatedWork,
 		dialogueCount += dialogues
 		characterCount += chars
 
-		for keyword, row := range workRows {
+		for _, row := range workRows {
+			keyword := row.Keyword
 			merged, exists := mergedRows[keyword]
 			if !exists {
 				merged = *row
@@ -184,10 +185,10 @@ func findWorkSetFromIndex(index keywordIndex, articleIDs []string) (relatedWork,
 			}
 			merged.Score += row.Score
 			merged.TF += row.TF
-			merged.DF = index.actualDF[keyword]
-			merged.TotalPages = totalPages
-			merged.DialogueCount = dialogueCount
-			merged.CharacterCount = characterCount
+			merged.DF = int32(index.actualDF[keyword])
+			merged.TotalPages = int32(totalPages)
+			merged.DialogueCount = int32(dialogueCount)
+			merged.CharacterCount = int32(characterCount)
 			mergedRows[keyword] = merged
 		}
 	}
@@ -322,13 +323,13 @@ func relatedWorkKeywordFromRow(row keywordRow) relatedWorkKeyword {
 	return relatedWorkKeyword{
 		Keyword: row.Keyword,
 		Score:   row.Score,
-		Rank:    row.Rank,
-		TF:      row.TF,
-		DF:      row.DF,
+		Rank:    int(row.Rank),
+		TF:      int(row.TF),
+		DF:      int(row.DF),
 	}
 }
 
-func topRelatedWorkKeywords(workRows map[string]*keywordRow, limit int) []relatedWorkKeyword {
+func topRelatedWorkKeywords(workRows workKeywordRows, limit int) []relatedWorkKeyword {
 	keywords := make([]relatedWorkKeyword, 0, len(workRows))
 	for _, row := range workRows {
 		keywords = append(keywords, relatedWorkKeywordFromRow(*row))
@@ -347,7 +348,7 @@ type relatedWorkKeywordOptions struct {
 	minKeywordDF   int
 }
 
-func topRelatedWorkKeywordsFromIndex(index keywordIndex, workRows map[string]*keywordRow, opts relatedWorkKeywordOptions) []relatedWorkKeyword {
+func topRelatedWorkKeywordsFromIndex(index keywordIndex, workRows workKeywordRows, opts relatedWorkKeywordOptions) []relatedWorkKeyword {
 	if opts.topN < 1 {
 		opts.topN = 100
 	}
@@ -359,7 +360,8 @@ func topRelatedWorkKeywordsFromIndex(index keywordIndex, workRows map[string]*ke
 	}
 
 	keywords := make([]relatedWorkKeyword, 0, len(workRows))
-	for keyword, row := range workRows {
+	for _, row := range workRows {
+		keyword := row.Keyword
 		keywordDF := index.actualDF[keyword]
 		if keywordDF < opts.minKeywordDF {
 			continue
@@ -406,21 +408,34 @@ func topAggregateWorkKeywordsFromIndex(index keywordIndex, workRows map[string]k
 		keywords = keywords[:opts.topN]
 	}
 	for i := range keywords {
-		keywords[i].Cooccur = maxWorkKeywordCooccur(index, workRows, keywords[i].Keyword)
+		keywords[i].Cooccur = maxAggregateWorkKeywordCooccur(index, workRows, keywords[i].Keyword)
 	}
 	sortRelatedWorkAggregateKeywords(keywords)
 	return keywords
 }
 
-func maxWorkKeywordCooccur[T any](index keywordIndex, workRows map[string]T, keyword string) int {
+func maxWorkKeywordCooccur(index keywordIndex, workRows workKeywordRows, keyword string) int {
+	maxCooccur := 0
+	for _, row := range workRows {
+		peerKeyword := row.Keyword
+		if peerKeyword == keyword {
+			continue
+		}
+		if count := keywordPairCooccur(index, keyword, peerKeyword); count > maxCooccur {
+			maxCooccur = count
+		}
+	}
+	return maxCooccur
+}
+
+func maxAggregateWorkKeywordCooccur(index keywordIndex, workRows map[string]keywordRow, keyword string) int {
 	maxCooccur := 0
 	for peerKeyword := range workRows {
 		if peerKeyword == keyword {
 			continue
 		}
-		cooccur := keywordPairCooccur(index, keyword, peerKeyword)
-		if cooccur > maxCooccur {
-			maxCooccur = cooccur
+		if count := keywordPairCooccur(index, keyword, peerKeyword); count > maxCooccur {
+			maxCooccur = count
 		}
 	}
 	return maxCooccur
@@ -437,7 +452,7 @@ func keywordPairCooccur(index keywordIndex, left string, right string) int {
 	}
 	cooccur := 0
 	for _, row := range leftWorks {
-		if _, ok := index.works[row.ArticleID][right]; ok {
+		if _, ok := index.works[row.ArticleID].get(right); ok {
 			cooccur++
 		}
 	}
@@ -518,9 +533,9 @@ func sortRelatedWorkKeywords(keywords []relatedWorkKeyword) {
 	})
 }
 
-func relatedWorkStats(workRows map[string]*keywordRow) (int, int, int) {
+func relatedWorkStats(workRows workKeywordRows) (int, int, int) {
 	for _, row := range workRows {
-		return row.TotalPages, row.DialogueCount, row.CharacterCount
+		return int(row.TotalPages), int(row.DialogueCount), int(row.CharacterCount)
 	}
 	return 0, 0, 0
 }

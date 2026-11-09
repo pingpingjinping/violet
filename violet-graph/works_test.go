@@ -142,7 +142,7 @@ func TestFindWorkSetKeepsAggregateScoreLeaderBeforeCooccurCutoff(t *testing.T) {
 		for i := 0; i < 120; i++ {
 			rows = append(rows, keywordRow{
 				ArticleID: articleID,
-				Rank:      i + 3,
+				Rank:      int32(i + 3),
 				Keyword:   "cooccur-heavy-" + string(rune('a'+i%26)) + string(rune('a'+i/26)),
 				Score:     1,
 				TF:        1,
@@ -156,7 +156,7 @@ func TestFindWorkSetKeepsAggregateScoreLeaderBeforeCooccurCutoff(t *testing.T) {
 		for j := 0; j < 120; j++ {
 			rows = append(rows, keywordRow{
 				ArticleID: articleID,
-				Rank:      j + 2,
+				Rank:      int32(j + 2),
 				Keyword:   "cooccur-heavy-" + string(rune('a'+j%26)) + string(rune('a'+j/26)),
 				Score:     1,
 				TF:        1,

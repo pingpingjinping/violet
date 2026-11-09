@@ -56,7 +56,8 @@ func findRelatedLinksFromIndex(index keywordIndex, opts relatedLinksOptions) rel
 
 	accumulators := make(map[string]*relatedLinkAccumulator)
 	for articleID := range works {
-		for keyword, row := range index.works[articleID] {
+		for _, row := range index.works[articleID] {
+			keyword := row.Keyword
 			if _, isQueryTerm := queryTermSet[keyword]; isQueryTerm {
 				continue
 			}
@@ -146,7 +147,7 @@ func intersectKeywordWorks(index keywordIndex, keywords []string) map[string]str
 		// The forward work map is O(1) for membership; avoid
 		// reconstructing a second reverse map per keyword.
 		for articleID := range intersection {
-			if _, exists := index.works[articleID][keyword]; !exists {
+			if _, exists := index.works[articleID].get(keyword); !exists {
 				delete(intersection, articleID)
 			}
 		}
