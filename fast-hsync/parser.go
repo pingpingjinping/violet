@@ -36,10 +36,12 @@ func parseGalleryBlock(html string) (*HitomiArticle, error) {
 	// Title
 	art.Title = strings.TrimSpace(root.Find("h1").First().Text())
 
-	// Artists from .artist-list
-	root.Find(".artist-list li").Each(func(_ int, s *goquery.Selection) {
+	// Artists from both known galleryblock layouts.
+	root.Find(".artist-list li, .artists-list li").Each(func(_ int, s *goquery.Selection) {
 		if a := s.Find("a").First(); a.Length() > 0 {
-			art.Artists = append(art.Artists, strings.TrimSpace(a.Text()))
+			if artist := strings.TrimSpace(a.Text()); artist != "" {
+				art.Artists = append(art.Artists, artist)
+			}
 		}
 	})
 	if len(art.Artists) == 0 {
@@ -119,11 +121,12 @@ func parseGallery(html string) (groups []string, characters []string) {
 // GalleryInfo holds the parsed result from a gallery JS response.
 type GalleryInfo struct {
 	Files      int
+	Artists    []string
 	Groups     []string
 	Characters []string
 }
 
-// parseGalleryJS parses a gallery JS response for file count, groups, and characters.
+// parseGalleryJS parses a gallery JS response for file count and metadata.
 // The JS format is: var galleryinfo = { "files": [...], "groups": [...], ... };
 func parseGalleryJS(js string) GalleryInfo {
 	var info GalleryInfo
@@ -135,6 +138,9 @@ func parseGalleryJS(js string) GalleryInfo {
 
 	var data struct {
 		Files      []json.RawMessage `json:"files"`
+		Artists    []struct {
+			Artist string `json:"artist"`
+		} `json:"artists"`
 		Groups     []struct {
 			Group string `json:"group"`
 		} `json:"groups"`
@@ -147,6 +153,11 @@ func parseGalleryJS(js string) GalleryInfo {
 	}
 
 	info.Files = len(data.Files)
+	for _, a := range data.Artists {
+		if artist := strings.TrimSpace(a.Artist); artist != "" {
+			info.Artists = append(info.Artists, artist)
+		}
+	}
 	for _, g := range data.Groups {
 		if g.Group != "" {
 			info.Groups = append(info.Groups, g.Group)
