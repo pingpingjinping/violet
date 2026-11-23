@@ -83,6 +83,43 @@ class ArtistMismatchAuditTests(unittest.TestCase):
             self.assertEqual(audit.classify(a, b, info), 'no_artists')
             db.close()
 
+    def test_sequel_title_warning_not_auto_candidate(self):
+        with tempfile.TemporaryDirectory() as td:
+            db = db_fixture(str(Path(td) / 'db.sqlite'))
+            target = audit.record(db, 1266970)
+            source = audit.record(db, 1266972)
+            info = {
+                'title': 'futanari otoko 2',
+                'artists': [{'artist': 'potato'}],
+                'groups': [{'group': 'potato house'}],
+                'files': [{}] * 15,
+            }
+            self.assertEqual(audit.classify(target, source, info), 'possible_sequel')
+            db.close()
+
+    def test_translated_korean_js_title_requires_review(self):
+        with tempfile.TemporaryDirectory() as td:
+            db = db_fixture(str(Path(td) / 'db.sqlite'))
+            target = list(audit.record(db, 2955989))
+            source = list(audit.record(db, 2956059))
+            title = '06_나오미의 이어지는바다'
+            target[1] = title
+            source[1] = title
+            info = {
+                'title': 'Naomi ni Tsuzuku Umi | 나오미의 이어지는 바다',
+                'artists': [{'artist': 'aratagawa nikei'}],
+                'files': [{}] * 22,
+            }
+            self.assertEqual(audit.classify(target, source, info),
+                             'translation_title_review')
+            info['title'] = 'A Completely Different Work'
+            self.assertEqual(audit.classify(target, source, info), 'title_diff')
+            info['title'] = ''
+            self.assertEqual(audit.classify(target, source, info), 'js_title_missing')
+            source[1] = 'Another title'
+            self.assertEqual(audit.classify(target, source, info), 'db_title_diff')
+            db.close()
+
     def test_resume_retryable_states(self):
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / 'audit.jsonl'
