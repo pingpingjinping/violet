@@ -22,6 +22,15 @@ def norm(text):
     return ' '.join(unicodedata.normalize('NFKC', text or '').casefold().split())
 
 
+def hangul_signature(text):
+    """Compare Korean text despite spaces, chapter prefixes, or bilingual titles.
+
+    This is only a *review signal*, never proof of identical galleries.
+    """
+    return ''.join(c for c in unicodedata.normalize('NFKC', text or '')
+                   if '\uac00' <= c <= '\ud7a3')
+
+
 def piped(text):
     return [s.strip() for s in (text or '').split('|')
             if s.strip() and s.strip().casefold() not in ('n/a', 'na')]
@@ -121,9 +130,24 @@ def classify(target, source, info):
     if target_count <= 0 or target_count != source_count or target_count != js_count:
         return 'page_count_diff'
     title = norm(target[1])
-    if not title or title != norm(source[1]) or (info.get('title') and title != norm(info['title'])):
-        return 'title_diff'
-    return 'review_candidate'
+    if not title or title != norm(source[1]):
+        return 'db_title_diff'
+    js_title = norm(info.get('title'))
+    if not js_title:
+        return 'js_title_missing'
+    if title == js_title:
+        return 'review_candidate'
+    # e.g. a JS title "futanari otoko 2" must never be considered identical
+    # to the older "futanari otoko", even with the same page count.
+    if js_title.startswith(title + ' ') and js_title[len(title) + 1:].isdigit():
+        return 'possible_sequel'
+    # e.g. "06_나오미의 이어지는바다" versus
+    # "Naomi ni Tsuzuku Umi | 나오미의 이어지는 바다".
+    # Matching Hangul text is only an additional review signal.
+    korean = hangul_signature(target[1])
+    if len(korean) >= 5 and korean == hangul_signature(info.get('title')):
+        return 'translation_title_review'
+    return 'title_diff'
 
 
 def audit_one(db, gallery_id, delay):
