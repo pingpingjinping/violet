@@ -367,10 +367,13 @@ func TestParseGalleryRedirect(t *testing.T) {
 }
 
 func TestParseGalleryJS(t *testing.T) {
-	js := `var galleryinfo = {"id": 123, "files": [{"name":"001.jpg"},{"name":"002.jpg"},{"name":"003.jpg"}], "groups": [{"group":"grpA","url":"/g/a"}], "characters": [{"character":"charX","url":"/c/x"},{"character":"charY","url":"/c/y"}]};`
+	js := `var galleryinfo = {"id": 123, "artists": [{"artist":"artistA","url":"/artist/artistA-all.html"}], "files": [{"name":"001.jpg"},{"name":"002.jpg"},{"name":"003.jpg"}], "groups": [{"group":"grpA","url":"/g/a"}], "characters": [{"character":"charX","url":"/c/x"},{"character":"charY","url":"/c/y"}]};`
 	info := parseGalleryJS(js)
 	if info.Files != 3 {
 		t.Errorf("Files = %d, want 3", info.Files)
+	}
+	if len(info.Artists) != 1 || info.Artists[0] != "artistA" {
+		t.Errorf("Artists = %v, want [artistA]", info.Artists)
 	}
 	if len(info.Groups) != 1 || info.Groups[0] != "grpA" {
 		t.Errorf("Groups = %v", info.Groups)
@@ -715,3 +718,35 @@ func TestSearchIndexLifecycle(t *testing.T) {
 
 // Verify unused import doesn't cause issues
 var _ = sql.ErrNoRows
+
+
+func TestParseGalleryBlockAlternateArtistsList(t *testing.T) {
+	html := `<div><a href="/doujinshi/example-123.html"><img src="x" /></a><h1>Example</h1>
+	<div class="artists-list"><ul><li><a>takizawa taki</a></li></ul></div>
+	<div><table><tr><td>Series</td><td></td></tr></table></div></div>`
+	art, err := parseGalleryBlock(html)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(art.Artists) != 1 || art.Artists[0] != "takizawa taki" {
+		t.Fatalf("Artists = %v", art.Artists)
+	}
+}
+
+func TestBuildModelsUsesGalleryJSArtists(t *testing.T) {
+	entries := []syncEntry{{idx: 0, id: 2614220, article: &HitomiArticle{
+		Artists: []string{"N/A"}, Title: "example", Language: "korean",
+	}}}
+	js := []string{`var galleryinfo = {"id":2614220, "artists":[{"artist":"takizawa taki"}],
+		"groups":[{"group":"shiroi tentoumushi"}], "files":[{"name":"1.jpg"}]};`}
+	models, ids := buildModels(entries, js)
+	if len(models) != 1 || len(ids) != 1 || ids[0] != 2614220 {
+		t.Fatalf("models=%d ids=%v", len(models), ids)
+	}
+	if models[0].Artists != "|takizawa taki|" {
+		t.Fatalf("Artists = %q", models[0].Artists)
+	}
+	if models[0].Groups != "|shiroi tentoumushi|" {
+		t.Fatalf("Groups = %q", models[0].Groups)
+	}
+}
