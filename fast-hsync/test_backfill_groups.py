@@ -96,6 +96,7 @@ class GroupBackfillTests(unittest.TestCase):
             db.execute("""INSERT INTO HitomiColumnModel
                 VALUES (8888888, 'exh-only', '|N/A|', NULL,
                         '|tag|', '', '', 'korean', 0)""")
+            db.commit()
             self.assertEqual(
                 [r[0] for r in backfill.candidates(db, None, 20)],
                 [3269198, 3312755, 8888888])
