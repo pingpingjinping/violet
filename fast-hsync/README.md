@@ -116,3 +116,46 @@ $env:COOKIE = "ipb_member_id=...; ipb_pass_hash=...; igneous=..."
 ```powershell
 go test ./...
 ```
+
+
+## 기존 작가 누락분 복구 (WalnutPi에서 실행)
+
+일반 동기화는 **이미 저장된 ID를 기본적으로 건너뜁니다**. 따라서 기존 작가 N/A 데이터는 별도 Python 스크립트 fast-hsync/backfill_artists.py로 복구합니다. GitHub Actions가 아니라 **원본 DB가 있는 Pi에서 실행**하며 Python 3 표준 라이브러리만 필요합니다.
+
+- 기본값은 읽기 전용 dry-run이며 최대 20건만 검사합니다.
+- 한국어 작품의 누락된 Artists 필드만 수정합니다.
+- 실제 수정에는 --apply --backup-confirmed 옵션이 모두 필요합니다. 반드시 백업 파일을 검증한 다음 사용하세요.
+- FtsTags가 존재하면 변경된 레코드의 검색 인덱스도 갱신합니다.
+- 결과는 JSONL 파일에 기록되며 --resume 옵션으로 이미 처리한 ID를 건너뛸 수 있습니다.
+- --fallback TARGET:SOURCE는 직접 검증된 동일 작품의 다른 등록본을 수동 지정할 때만 사용합니다. 대상 JS가 404이고 그룹명이 일치해야 대체합니다. 그룹 일치 자체는 동일 작품의 증거가 아니므로 먼저 제목과 내용을 확인해야 합니다.
+
+읽기 전용 시험:
+
+    DB=/var/lib/docker/volumes/violet_violet-content-db/_data/data.db
+    python3 fast-hsync/backfill_artists.py "$DB" \
+      --ids 2250876 2614220 2614221 2614222 2612491 \
+      --fallback 2250876:2614220 --limit 5
+
+**중요: 원본 SQLite의 온라인 백업을 별도 저장장치에 만들고 PRAGMA quick_check로 백업 무결성을 확인한 후에만 적용하세요.** DB 크기와 여유 공간을 확인하고 자동 갱신 시간대를 피하세요.
+
+백업 검증 이후 실제 반영:
+
+    sudo python3 fast-hsync/backfill_artists.py "$DB" \
+      --ids 2250876 2614220 2614221 2614222 2612491 \
+      --fallback 2250876:2614220 --limit 5 \
+      --apply --backup-confirmed --report backfill-artists-applied.jsonl
+
+소규모 시험을 마친 후 한국어 누락 데이터 배치 처리:
+
+    python3 fast-hsync/backfill_artists.py "$DB" --limit 100 --resume
+    sudo python3 fast-hsync/backfill_artists.py "$DB" \
+      --limit 100 --apply --backup-confirmed \
+      --resume --report backfill-artists-applied.jsonl
+
+이 도구는 **원본 DB와 FtsTags만 수정**합니다. 자동으로 모바일 DB export/배포를 실행하거나 기존 동기화 chunk 파일을 생성하지 않습니다. 원본 변경이 검증된 뒤 기존 모바일 DB export 및 배포 파이프라인을 별도로 실행해야 앱에 반영됩니다.
+
+테스트:
+
+    cd fast-hsync
+    python3 -m unittest -v test_backfill_artists.py
+    go test ./...
