@@ -704,8 +704,9 @@ func TestSearchIndexLifecycle(t *testing.T) {
 	if err := db.QueryRow(`SELECT COUNT(*) FROM FtsTags WHERE Tags MATCH '"female:glasses"'`).Scan(&count); err != nil {
 		t.Fatalf("new tag query after update: %v", err)
 	}
-	if count != 1 {
-		t.Fatalf("new tag count = %d, want 1", count)
+	// The updated record and the pre-existing expunged record both have this tag.
+	if count != 2 {
+		t.Fatalf("new tag count = %d, want 2", count)
 	}
 
 	if err := db.QueryRow(`SELECT COUNT(*) FROM FtsTitle WHERE FtsTitle MATCH '"space"'`).Scan(&count); err != nil {
