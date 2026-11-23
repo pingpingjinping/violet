@@ -240,3 +240,34 @@ sudo python3 fast-hsync/backfill_artists.py "$DB" \
 출력의 `apply: 0 rows`는 남은 **미처리 후보가 없다는 뜻**이지,
 DB에서 모든 작가 누락이 사라졌다는 뜻이 아닙니다. 복구 실패/정보 없음,
 `ExistOnHitomi=0`은 이후 별도 확인 대상입니다.
+
+
+## ID가 다른 JS 응답(artist id_mismatch) 읽기 전용 조사
+
+Hitomi의 오래된 gallery ID를 조회했을 때 HTTP URL은 그대로지만
+JS 안의 `galleryinfo.id`가 새 등록본을 가리키는 사례가 있습니다.
+같은 시리즈의 다른 분량일 수 있으므로 단순히 작가를 자동 복사하면 안 됩니다.
+
+`audit_artist_mismatches.py`는 이전 작가 백필 JSONL의
+`id_mismatch`를 읽어 원본과 새 ID의 DB 제목, 언어,
+페이지 수, 그룹, JS 작가를 비교하여 분류합니다.
+
+- **DB를 절대 수정하지 않습니다.** 별도 audit JSONL만 기록합니다.
+- 대상은 기존 보고서에서 `mode=apply, status=id_mismatch`인 ID입니다.
+- 요청은 순차 실행하고 기본 0.6초 대기하며, `--delay` 최소 0.5초를 강제합니다.
+- `review_candidate`는 동일 작품 확정이 아닙니다. DB 제목, JS 제목,
+  페이지 수(대상/소스/JS) 및 작가/그룹 충돌 여부를 통과한
+  **사람이 추가 검증할 후보**입니다. 이미지 내용 동일성은 검사하지 않습니다.
+- `page_count_diff` 사례(예: Ch.1-5 → Ch.1-22)는 제외합니다.
+- `--resume`으로 이전 조사 기록을 재사용합니다.
+
+~~~bash
+DB=/var/lib/docker/volumes/violet_violet-content-db/_data/data.db
+python3 fast-hsync/audit_artist_mismatches.py "$DB" \
+  --source-report /home/pi/violet-artist-batch.jsonl \
+  --report /home/pi/violet-artist-mismatch-audit.jsonl \
+  --limit 30 --delay 0.6 --resume
+~~~
+
+최종적으로 자동 복구를 구현하기 전에는 이미지/원본 게시물 비교 등
+추가적인 동일 작품 검증을 실시해야 합니다.
