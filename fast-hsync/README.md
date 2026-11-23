@@ -271,3 +271,22 @@ python3 fast-hsync/audit_artist_mismatches.py "$DB" \
 
 최종적으로 자동 복구를 구현하기 전에는 이미지/원본 게시물 비교 등
 추가적인 동일 작품 검증을 실시해야 합니다.
+
+
+### JS와 DB 제목이 다른 경우
+
+기존 `review_candidate`는 원본 DB, 소스 DB, JS 제목이 모두 같은 경우에만 유지합니다.
+페이지 수가 같아도 JS 제목이 달라지면 자동으로 동일 작품으로 취급하지 않습니다.
+
+- `possible_sequel`: 예를 들어 DB 제목 `futanari otoko`,
+  JS 제목 `futanari otoko 2`처럼 숫자 후속편 가능성이 있어 자동 적용 금지
+- `translation_title_review`: 예를 들어 DB 제목
+  `06_나오미의 이어지는바다`와 JS의
+  `Naomi ni Tsuzuku Umi | 나오미의 이어지는 바다`처럼
+  정규화된 한글 문자열이 같고 제목이 번역/병기된 경우
+  (여전히 사람의 작품 동일성 검토가 필요)
+- `db_title_diff`: 원본 DB와 소스 DB 제목부터 불일치
+- `js_title_missing`: JS에서 제목을 찾을 수 없어 검증 불가
+
+구버전 보고서의 `title_diff` 결과는 `--resume` 사용 시 재검토되지 않으므로
+새 결과 파일로 재검사하세요. 예: `/home/pi/violet-artist-mismatch-audit-v2.jsonl`.
