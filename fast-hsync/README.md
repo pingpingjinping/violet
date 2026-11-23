@@ -290,3 +290,49 @@ python3 fast-hsync/audit_artist_mismatches.py "$DB" \
 
 구버전 보고서의 `title_diff` 결과는 `--resume` 사용 시 재검토되지 않으므로
 새 결과 파일로 재검사하세요. 예: `/home/pi/violet-artist-mismatch-audit-v2.jsonl`.
+
+
+## 미스매치 후보 2차 메타데이터 검토 (읽기 전용)
+
+`rank_artist_mismatch_candidates.py`는 완료된 `audit_artist_mismatches.py`
+JSONL의 각 ID별 **마지막 결과** 중 `review_candidate`와
+`translation_title_review`를 뽑아서 DB의 그룹, 태그(Jaccard), 썸네일,
+EHash를 비교합니다. 동일 썸네일이나 동일 태그라도 **이미지 내용이
+동일하다는 뜻이 아닙니다**. EHash는 ExHentai 갤러리 식별자이며 이미지
+파일 해시가 아닙니다. 이미지 동일성은 **검사하지 않고**, 작가 정보를
+DB에 **일절 쓰지 않습니다**. 모든 항목에는 `image_verified: false`가
+표기됩니다.
+
+~~~bash
+DB=/var/lib/docker/volumes/violet_violet-content-db/_data/data.db
+sudo python3 ~/violet-hitomi-phase1/fast-hsync/rank_artist_mismatch_candidates.py "$DB" \
+  --audit-report /home/pi/violet-artist-mismatch-audit-v2.jsonl \
+  --report /home/pi/violet-artist-candidates-ranked.jsonl --top 25
+~~~
+
+`first_review`와 `next_review`부터 사람이 이미지/원문을 직접 확인하세요.
+`metadata_conflict`는 우선 제외하며, **이 스크립트의 결과만으로
+다른 ID의 작가를 복사하면 안 됩니다**.
+
+## 그룹 백필: Hitomi 등록 작품만 우선 처리
+
+작가 백필처럼 `backfill_groups.py --hitomi-only`를 사용하면
+`ExistOnHitomi=1`인 작품만 후보로 선택하고, DB 적용 직전에도 같은
+조건을 재확인합니다. 기존 백필 동작을 유지하려면 옵션을 생략하세요.
+
+~~~bash
+DB=/var/lib/docker/volumes/violet_violet-content-db/_data/data.db
+# 먼저 안전하게 30개 확인 (DB 변경 없음)
+sudo python3 ~/violet-hitomi-phase1/fast-hsync/backfill_groups.py "$DB" \
+  --hitomi-only --limit 30 --workers 2 \
+  --report /home/pi/violet-group-hitomi-dryrun.jsonl
+
+# 온라인 백업과 PRAGMA quick_check 검증을 다시 완료한 경우에만 실제 반영
+sudo python3 ~/violet-hitomi-phase1/fast-hsync/backfill_groups.py "$DB" \
+  --hitomi-only --limit 200 --workers 2 --resume \
+  --apply --backup-confirmed \
+  --report /home/pi/violet-group-hitomi-applied.jsonl
+~~~
+
+중요: `--resume`은 해당 모드와 보고서의 이전 검사 ID를 건너뜁니다.
+원본 DB의 동시 쓰기를 피하고, 적용 후 `FtsTags`를 확인하세요.
