@@ -49,6 +49,30 @@ class GroupBackfillTests(unittest.TestCase):
             self.assertEqual(backfill.candidates(db, [9999999], 10), [])
             db.close()
 
+    def test_missing_artists_only_selection_and_write_time_guard(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = fixture_db(Path(tmp) / 'db.sqlite')
+            # Only 3312755 is missing both Artists and Groups.
+            self.assertEqual([r[0] for r in backfill.candidates(
+                db, None, 20, hitomi_only=True, missing_artists_only=True)],
+                [3312755])
+            # A stale row must not be updated if Artists were filled meanwhile.
+            row = backfill.candidates(
+                db, [3312755], 1, True, True)[0]
+            db.execute("UPDATE HitomiColumnModel SET Artists='|found|' WHERE Id=3312755")
+            db.commit()
+            self.assertFalse(backfill.apply_group(
+                db, row, {'groups': '|wrong|'},
+                hitomi_only=True, missing_artists_only=True))
+            self.assertEqual(db.execute(
+                'SELECT Artists, "Groups" FROM HitomiColumnModel WHERE Id=3312755'
+            ).fetchone(), ('|found|', ''))
+            # Existing Artists must never get overwritten, even when manually asked.
+            self.assertFalse(backfill.apply_group(
+                db, (3269198, None), {'groups': '|wrong|'},
+                hitomi_only=True, missing_artists_only=True))
+            db.close()
+
     def test_group_resolution_and_skip_empty_or_mismatch(self):
         row = (3269198, None)
         with patch.object(backfill, 'fetch_gallery', return_value={
