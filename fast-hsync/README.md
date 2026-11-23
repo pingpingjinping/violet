@@ -159,3 +159,52 @@ go test ./...
     cd fast-hsync
     python3 -m unittest -v test_backfill_artists.py
     go test ./...
+
+
+## 기존 그룹 정보 누락 복구 (WalnutPi)
+
+작가와 별개로 Groups가 비어 있는 **한국어 작품**을 복구하려면
+fast-hsync/backfill_groups.py를 사용하세요. Python 3 표준 라이브러리로 동작하지만
+같은 폴더의 backfill_artists.py에서 gallery JS 조회 도구를 가져옵니다.
+
+- 기본 실행은 **읽기 전용 dry-run**, 최대 20개
+- 기본 workers=2 (1~4), JS 내부의 ID가 요청 ID와 달라지면 `id_mismatch`로 제외
+- 원본 JS에 Groups가 비어 있으면 `no_groups`로 남기고 DB를 수정하지 않음
+- 이미 Groups가 있는 행과 Artists 및 기타 컬럼은 수정하지 않음
+- `--apply --backup-confirmed`가 동시에 있어야 그룹과 FtsTags를 수정
+- 기존 작가 백필 결과 파일과 **다른 보고서**에 기록할 것
+- 그룹이 없는 레코드는 동일 작품인지 검증할 수 없으므로, 이 도구는 타 ID의
+  그룹을 자동으로 추론하거나 대체하지 않습니다.
+
+샘플 14개에 대한 읽기 전용 검증:
+
+~~~bash
+DB=/var/lib/docker/volumes/violet_violet-content-db/_data/data.db
+sudo python3 ~/violet-artist-fix/fast-hsync/backfill_groups.py "$DB" \
+  --ids 3269198 3415040 1165878 3196000 3425723 2999334 \
+        3200939 3312755 3446385 3504519 2504867 3302295 3111717 2813510 \
+  --limit 14 --report /home/pi/violet-group-dryrun.jsonl
+~~~
+
+DB 백업 무결성을 검증한 뒤 실제 반영 (예시):
+
+~~~bash
+sudo python3 ~/violet-artist-fix/fast-hsync/backfill_groups.py "$DB" \
+  --ids 3269198 3415040 1165878 3196000 3425723 2999334 \
+        3200939 3312755 3446385 3504519 2504867 3302295 3111717 2813510 \
+  --limit 14 --apply --backup-confirmed \
+  --report /home/pi/violet-group-applied.jsonl
+~~~
+
+일반 배치: `--limit 100 --resume --apply --backup-confirmed`
+(작가 백필과 같은 DB를 동시에 쓰지 않도록 순차 실행).
+
+이 스크립트는 **모바일용 DB를 자동으로 내보내지 않습니다**.
+백필 후 기존 export/배포 단계를 별도로 실행해야 아이폰 앱에 반영됩니다.
+
+테스트:
+
+~~~bash
+cd fast-hsync
+python3 -m unittest -v test_backfill_artists.py test_backfill_groups.py
+~~~
