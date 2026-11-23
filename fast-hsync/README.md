@@ -208,3 +208,35 @@ sudo python3 ~/violet-artist-fix/fast-hsync/backfill_groups.py "$DB" \
 cd fast-hsync
 python3 -m unittest -v test_backfill_artists.py test_backfill_groups.py
 ~~~
+
+
+### 1차: Hitomi 등록 작품만 작가 복구
+
+ExHentai 전용이거나 Hitomi에 존재하지 않는 작품을 Hitomi gallery JS에
+불필요하게 요청하지 않으려면 `--hitomi-only` 옵션을 사용하세요.
+이 옵션은 조회 후보 및 DB 쓰기 시 모두 `ExistOnHitomi=1`을 검사합니다.
+기본값은 이전과 동일하게 모든 한국어 작가 누락 레코드를 대상으로 합니다.
+**이 옵션은 ExHentai에 요청을 보내지 않습니다.**
+
+이미 사용한 JSONL 적용 보고서를 그대로 지정하면 `--resume`으로
+앞서 검사했던 ID를 건너뛸 수 있습니다.
+
+~~~bash
+DB=/var/lib/docker/volumes/violet_violet-content-db/_data/data.db
+
+# 먼저 20개 확인: DB 쓰기 없음
+sudo python3 fast-hsync/backfill_artists.py "$DB" \
+  --hitomi-only --limit 20 --workers 2 \
+  --report /home/pi/violet-artist-hitomi-dryrun.jsonl
+
+# 검증된 백업 확인 후 1회 실제 반영
+sudo python3 fast-hsync/backfill_artists.py "$DB" \
+  --hitomi-only --limit 500 --workers 2 --resume \
+  --apply --backup-confirmed \
+  --report /home/pi/violet-artist-batch.jsonl
+~~~
+
+대량 배치는 위 명령을 반복하거나 tmux 등에서 순차적으로 실행하세요.
+출력의 `apply: 0 rows`는 남은 **미처리 후보가 없다는 뜻**이지,
+DB에서 모든 작가 누락이 사라졌다는 뜻이 아닙니다. 복구 실패/정보 없음,
+`ExistOnHitomi=0`은 이후 별도 확인 대상입니다.
