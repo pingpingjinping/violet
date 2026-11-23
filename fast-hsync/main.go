@@ -72,7 +72,7 @@ func main() {
 	entries, jsURLs := parseBlocks(blockHTMLs)
 	log.Printf("Found %d valid galleries, downloading gallery info...", len(entries))
 
-	// Phase 3: Download gallery JS (file counts + groups + characters)
+	// Phase 3: Download gallery JS (file counts + artists + groups + characters)
 	jsResults := downloadStrings(jsURLs, maxConcurrency, "gallery-js", opts.quiet)
 
 	// Phase 4: Merge downloaded data → build column models
@@ -344,7 +344,7 @@ func parseBlocks(blockHTMLs []string) (entries []syncEntry, jsURLs []string) {
 	return
 }
 
-// buildModels merges gallery JS data (file count, groups, characters)
+// buildModels merges gallery JS data (file count, artists, groups, characters)
 // into each parsed article, then converts them to HitomiColumnModels.
 func buildModels(entries []syncEntry, jsResults []string) ([]*HitomiColumnModel, []int) {
 	models := make([]*HitomiColumnModel, 0, len(entries))
@@ -355,6 +355,9 @@ func buildModels(entries []syncEntry, jsResults []string) ([]*HitomiColumnModel,
 
 		if e.idx < len(jsResults) && jsResults[e.idx] != "" {
 			info := parseGalleryJS(jsResults[e.idx])
+			if len(info.Artists) > 0 {
+				art.Artists = info.Artists
+			}
 			if info.Files > 0 {
 				art.Files = strconv.Itoa(info.Files)
 			}
