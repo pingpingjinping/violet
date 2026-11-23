@@ -89,16 +89,17 @@ def parse_fallback(values):
     return result
 
 
-def candidates(db, specific_ids, limit):
+def candidates(db, specific_ids, limit, hitomi_only=False):
+    hitomi_filter = ' AND ExistOnHitomi=1' if hitomi_only else ''
     if specific_ids:
         qs = ','.join('?' * len(specific_ids))
         query = (f"SELECT Id, Artists, \"Groups\" FROM HitomiColumnModel "
                  f"WHERE Id IN ({qs}) AND LOWER(TRIM(Language))='korean' "
-                 f"AND {MISSING_ARTISTS} ORDER BY Id LIMIT ?")
+                 f"AND {MISSING_ARTISTS}{hitomi_filter} ORDER BY Id LIMIT ?")
         return db.execute(query, [*specific_ids, limit]).fetchall()
     return db.execute(
         f"SELECT Id, Artists, \"Groups\" FROM HitomiColumnModel "
-        f"WHERE LOWER(TRIM(Language))='korean' AND {MISSING_ARTISTS} "
+        f"WHERE LOWER(TRIM(Language))='korean' AND {MISSING_ARTISTS}{hitomi_filter} "
         f"ORDER BY Id LIMIT ?", (limit,)).fetchall()
 
 
@@ -121,12 +122,14 @@ def resolve_artist(record, fallback):
             'source_id': source_id}
 
 
-def update_one(db, row, result, has_fts):
+def update_one(db, row, result, has_fts, hitomi_only=False):
     gallery_id, old_artists, _ = row
     # A compare-and-set prevents overwriting a newer normal sync result.
+    hitomi_filter = ' AND ExistOnHitomi=1' if hitomi_only else ''
     cur = db.execute(f"UPDATE HitomiColumnModel SET Artists=? "
                      f"WHERE Id=? AND Artists IS ? AND LOWER(TRIM(Language))='korean' "
-                     f"AND {MISSING_ARTISTS}", (result['artists'], gallery_id, old_artists))
+                     f"AND {MISSING_ARTISTS}{hitomi_filter}",
+                     (result['artists'], gallery_id, old_artists))
     if cur.rowcount != 1:
         db.rollback()
         return False
@@ -166,6 +169,8 @@ def main(argv=None):
     parser.add_argument('--ids', type=int, nargs='+', help='Check only these gallery IDs')
     parser.add_argument('--limit', type=int, default=20, help='Maximum records per run (default: 20)')
     parser.add_argument('--workers', type=int, default=2, help='Parallel requests (1..4)')
+    parser.add_argument('--hitomi-only', action='store_true',
+                        help='Only process records with ExistOnHitomi=1 (skip EH-only/missing)')
     parser.add_argument('--apply', action='store_true', help='Write artists and refresh FtsTags')
     parser.add_argument('--backup-confirmed', action='store_true', help='Confirm verified DB backup before apply')
     parser.add_argument('--fallback', action='append', default=[], metavar='TARGET:SOURCE',
@@ -190,17 +195,19 @@ def main(argv=None):
         db.execute('PRAGMA busy_timeout=30000')
         mode = 'apply' if args.apply else 'dry-run'
         seen = read_resume_ids(args.report, mode) if args.resume else set()
-        rows = candidates(db, args.ids, args.limit + len(seen))
+        rows = candidates(db, args.ids, args.limit + len(seen), args.hitomi_only)
         rows = [row for row in rows if row[0] not in seen][:args.limit]
         has_fts = bool(db.execute("SELECT 1 FROM sqlite_master WHERE name='FtsTags' AND type='table'").fetchone())
-        print(f'{mode}: {len(rows)} rows, workers={args.workers}, FtsTags={has_fts}, report={args.report}', flush=True)
+        print(f'{mode}: {len(rows)} rows, workers={args.workers}, '
+              f'HitomiOnly={args.hitomi_only}, FtsTags={has_fts}, report={args.report}', flush=True)
         counts = {}
         with args.report.open('a', encoding='utf-8') as report:
             with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as pool:
                 for row, item in zip(rows, pool.map(lambda x: resolve_artist(x, fallback), rows)):
                     if args.apply and item['status'] == 'found':
                         try:
-                            item['status'] = 'applied' if update_one(db, row, item, has_fts) else 'stale'
+                            item['status'] = ('applied' if update_one(db, row, item, has_fts,
+                                                                args.hitomi_only) else 'stale')
                         except sqlite3.Error as exc:
                             db.rollback()
                             item['status'] = 'db_error'
