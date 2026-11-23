@@ -90,6 +90,33 @@ class GroupBackfillTests(unittest.TestCase):
                            'WHERE Id = 3269198').fetchone()[0], '|orangemaru|')
             db.close()
 
+    def test_hitomi_only_limits_candidates_and_write_guard(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = fixture_db(Path(tmp) / 'db.sqlite')
+            db.execute("""INSERT INTO HitomiColumnModel
+                VALUES (8888888, 'exh-only', '|N/A|', NULL,
+                        '|tag|', '', '', 'korean', 0)""")
+            self.assertEqual(
+                [r[0] for r in backfill.candidates(db, None, 20)],
+                [3269198, 3312755, 8888888])
+            self.assertEqual(
+                [r[0] for r in backfill.candidates(db, None, 20, True)],
+                [3269198, 3312755])
+            # Even an old, previously read row cannot update an EH-only record.
+            self.assertFalse(backfill.apply_group(
+                db, (8888888, None), {'groups': '|mistaken|'},
+                hitomi_only=True))
+            self.assertIsNone(db.execute(
+                'SELECT "Groups" FROM HitomiColumnModel WHERE Id=8888888'
+            ).fetchone()[0])
+            # A record becoming ineligible between read and write is rejected.
+            row = backfill.candidates(db, [3269198], 1, True)[0]
+            db.execute('UPDATE HitomiColumnModel SET ExistOnHitomi=0 WHERE Id=3269198')
+            db.commit()
+            self.assertFalse(backfill.apply_group(
+                db, row, {'groups': '|mistaken|'}, hitomi_only=True))
+            db.close()
+
     def test_group_is_not_inferred_from_artist(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = fixture_db(Path(tmp) / 'db.sqlite')
