@@ -72,6 +72,55 @@ class ArtistBackfillTests(unittest.TestCase):
             self.assertFalse(backfill.update_one(db, row, {'artists': '|wrong|'}, True))
             db.close()
 
+    def test_hitomi_only_selection_and_write_guard(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = sqlite3.connect(str(Path(tmp) / 'test.db'))
+            db.executescript("""
+                CREATE TABLE HitomiColumnModel (
+                    Id INTEGER PRIMARY KEY, Title TEXT, Artists TEXT, "Groups" TEXT,
+                    Tags TEXT, Series TEXT, Characters TEXT, Language TEXT,
+                    ExistOnHitomi INTEGER
+                );
+                CREATE VIRTUAL TABLE FtsTags USING fts5(
+                    Tags, Artists, Groups_, Series, Characters,
+                    tokenize="unicode61 tokenchars ':_'"
+                );
+                INSERT INTO HitomiColumnModel VALUES
+                    (100,'EH only','|N/A|',NULL,'','','','korean',0),
+                    (200,'Hitomi','|N/A|',NULL,'','','','korean',1),
+                    (300,'Already known','|writer|',NULL,'','','','korean',1);
+                INSERT INTO FtsTags(rowid, Tags, Artists, Groups_, Series, Characters)
+                    VALUES (100,'','N/A','','',''), (200,'','N/A','','',''),
+                           (300,'','writer','','','');
+            """)
+            self.assertEqual(
+                [r[0] for r in backfill.candidates(db, None, 20)],
+                [100, 200])
+            self.assertEqual(
+                [r[0] for r in backfill.candidates(db, None, 20, hitomi_only=True)],
+                [200])
+            self.assertEqual(
+                [r[0] for r in backfill.candidates(db, [100, 200], 20,
+                                                    hitomi_only=True)], [200])
+            eh_row = backfill.candidates(db, [100], 20)[0]
+            self.assertFalse(backfill.update_one(
+                db, eh_row, {'artists': '|unexpected|'}, True, hitomi_only=True))
+            self.assertEqual(db.execute(
+                'SELECT Artists FROM HitomiColumnModel WHERE Id=100'
+            ).fetchone()[0], '|N/A|')
+
+            hitomi_row = backfill.candidates(db, [200], 20, hitomi_only=True)[0]
+            self.assertTrue(backfill.update_one(
+                db, hitomi_row, {'artists': '|correct artist|'},
+                True, hitomi_only=True))
+            self.assertEqual(db.execute(
+                "SELECT Artists FROM HitomiColumnModel WHERE Id=200"
+            ).fetchone()[0], '|correct artist|')
+            self.assertEqual(db.execute(
+                "SELECT COUNT(*) FROM FtsTags WHERE Artists MATCH 'correct_artist'"
+            ).fetchone()[0], 1)
+            db.close()
+
     def test_resume_skips_completed_records(self):
         with tempfile.TemporaryDirectory() as temp:
             report = Path(temp) / 'report.jsonl'
