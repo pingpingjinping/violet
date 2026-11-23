@@ -11,15 +11,16 @@ import sqlite3
 import sys
 from pathlib import Path
 
-from backfill_artists import fetch_gallery, read_resume_ids
+from backfill_artists import fetch_gallery, read_resume_ids, MISSING_ARTISTS
 
 MISSING_GROUPS = """("Groups" IS NULL OR TRIM("Groups") = ''
  OR UPPER(REPLACE(TRIM("Groups"), '|', '')) = 'N/A')"""
 
 
-def candidates(db, specific_ids, limit, hitomi_only=False):
+def candidates(db, specific_ids, limit, hitomi_only=False, missing_artists_only=False):
     hitomi_filter = ' AND ExistOnHitomi=1' if hitomi_only else ''
-    where = f"LOWER(TRIM(Language))='korean' AND {MISSING_GROUPS}{hitomi_filter}"
+    artist_filter = f' AND {MISSING_ARTISTS}' if missing_artists_only else ''
+    where = f"LOWER(TRIM(Language))='korean' AND {MISSING_GROUPS}{hitomi_filter}{artist_filter}"
     if specific_ids:
         placeholders = ','.join('?' for _ in specific_ids)
         return db.execute(
@@ -48,16 +49,17 @@ def resolve_group(row):
             'groups': '|' + '|'.join(groups) + '|'}
 
 
-def apply_group(db, row, result, hitomi_only=False):
+def apply_group(db, row, result, hitomi_only=False, missing_artists_only=False):
     gallery_id, old_groups = row
     hitomi_filter = ' AND ExistOnHitomi=1' if hitomi_only else ''
+    artist_filter = f' AND {MISSING_ARTISTS}' if missing_artists_only else ''
     try:
         # Compare-and-set ensures no regular sync or other job replaced
         # the missing value since we read it.
         changed = db.execute(
             f'UPDATE HitomiColumnModel SET "Groups" = ? '
             f'WHERE Id = ? AND "Groups" IS ? '
-            f"AND LOWER(TRIM(Language))='korean' AND {MISSING_GROUPS}{hitomi_filter}",
+            f"AND LOWER(TRIM(Language))='korean' AND {MISSING_GROUPS}{hitomi_filter}{artist_filter}",
             (result['groups'], gallery_id, old_groups),
         )
         if changed.rowcount != 1:
@@ -89,6 +91,8 @@ def main(argv=None):
     parser.add_argument('--ids', type=int, nargs='+', help='Test only these IDs')
     parser.add_argument('--hitomi-only', action='store_true',
                         help='Only process ExistOnHitomi=1 records')
+    parser.add_argument('--missing-artists-only', action='store_true',
+                        help='Only check records where Artists and Groups are both missing')
     parser.add_argument('--limit', type=int, default=20,
                         help='Max records per run (default 20)')
     parser.add_argument('--workers', type=int, default=2,
@@ -123,10 +127,12 @@ def main(argv=None):
         if args.apply and not fts_exists:
             parser.error('FtsTags is missing; refusing to update without search index')
         seen = read_resume_ids(args.report, mode) if args.resume else set()
-        rows = candidates(db, args.ids, args.limit + len(seen), args.hitomi_only)
+        rows = candidates(db, args.ids, args.limit + len(seen), args.hitomi_only,
+                          args.missing_artists_only)
         rows = [r for r in rows if r[0] not in seen][:args.limit]
         print(f'{mode}: {len(rows)} rows, workers={args.workers}, '
               f'HitomiOnly={args.hitomi_only}, '
+              f'MissingArtistsOnly={args.missing_artists_only}, '
               f'FtsTags={fts_exists}, report={args.report}', flush=True)
 
         counts = {}
@@ -135,7 +141,8 @@ def main(argv=None):
                 for row, result in zip(rows, pool.map(resolve_group, rows)):
                     if args.apply and result['status'] == 'found':
                         try:
-                            result['status'] = ('applied' if apply_group(db, row, result, args.hitomi_only)
+                            result['status'] = ('applied' if apply_group(db, row, result, args.hitomi_only,
+                                                             args.missing_artists_only)
                                                 else 'stale')
                         except sqlite3.Error as exc:
                             result['status'] = 'db_error'

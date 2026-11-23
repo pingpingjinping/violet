@@ -336,3 +336,23 @@ sudo python3 ~/violet-hitomi-phase1/fast-hsync/backfill_groups.py "$DB" \
 
 중요: `--resume`은 해당 모드와 보고서의 이전 검사 ID를 건너뜁니다.
 원본 DB의 동시 쓰기를 피하고, 적용 후 `FtsTags`를 확인하세요.
+
+
+## 그룹 백필을 작가·그룹 동시 누락 작품으로 제한
+
+`backfill_groups.py --hitomi-only --missing-artists-only`는 한국어,
+`ExistOnHitomi=1`, `Artists`와 `Groups`가 둘 다 누락된 작품만
+조회합니다. 적용 직전에도 같은 조건을 다시 검사하여 동기화나 다른
+백필이 작가를 채웠다면 그룹을 수정하지 않습니다.
+
+```bash
+DB=/var/lib/docker/volumes/violet_violet-content-db/_data/data.db
+sudo python3 ~/violet-hitomi-phase1/fast-hsync/backfill_groups.py "$DB" \
+  --hitomi-only --missing-artists-only --limit 1000 --workers 2 \
+  --resume --apply --backup-confirmed \
+  --report /home/pi/violet-group-hitomi-applied.jsonl
+```
+
+기존 그룹 백필 보고서를 재사용하므로 전에 확인한 ID는 재검사하지 않습니다.
+이미 작성된 `Artists`는 변경하지 않습니다. 읽기 전용으로 먼저 검사하려면
+`--apply --backup-confirmed`를 생략하고 별도 `--report` 파일을 지정하세요.
