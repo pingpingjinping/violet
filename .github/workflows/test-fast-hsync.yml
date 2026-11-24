@@ -28,4 +28,4 @@ jobs:
           python-version: '3.12'
       - name: Python artist backfill tests
         working-directory: fast-hsync
-        run: python3 -m unittest -v test_backfill_artists.py test_backfill_groups.py test_audit_artist_mismatches.py test_rank_artist_mismatch_candidates.py test_audit_eh_metadata.py
+        run: python3 -m unittest -v test_backfill_artists.py test_backfill_groups.py test_audit_artist_mismatches.py test_rank_artist_mismatch_candidates.py test_audit_eh_metadata.py test_apply_eh_metadata.py
